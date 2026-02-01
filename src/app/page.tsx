@@ -31,6 +31,7 @@ export default function Home() {
   const [analyzeConfidence, setAnalyzeConfidence] = useState<number | null>(null);
   const [outputMode, setOutputMode] = useState<"text" | "voice">("text");
   const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
+  const [convMode, setConvMode] = useState(false);
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
   const [showGlassesModal, setShowGlassesModal] = useState(false);
@@ -41,6 +42,8 @@ export default function Home() {
   const backoffRef = useRef<number>(500);
   const engageBufRef = useRef<string[]>([]);
   const [engagement, setEngagement] = useState<string>("-");
+  const stableEngagementRef = useRef<string>("-");
+  const [reconnecting, setReconnecting] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -86,7 +89,12 @@ export default function Home() {
         if (nod >= 3 && nod > shake) cue = "agreeing";
         else if (shake >= 3 && shake > nod) cue = "disagreeing?";
         else if (steady >= 5) cue = "engaged";
-        setEngagement(cue);
+        // Debounce engagement changes: require two consecutive cues
+        if (stableEngagementRef.current === cue) {
+          setEngagement(cue);
+        } else {
+          stableEngagementRef.current = cue;
+        }
       });
     } else {
       bridgeRef.current?.stop();
@@ -95,6 +103,8 @@ export default function Home() {
       lastSensorTsRef.current = 0;
       engageBufRef.current = [];
       setEngagement("-");
+      stableEngagementRef.current = "-";
+      setReconnecting(false);
     }
     return () => {
       bridgeRef.current?.stop();
@@ -109,6 +119,7 @@ export default function Home() {
       if (cancelled) return;
       const now = Date.now();
       if (lastSensorTsRef.current && now - lastSensorTsRef.current > 3000) {
+        setReconnecting(true);
         try { bridgeRef.current?.stop(); } catch {}
         try {
           bridgeRef.current = createBridge(bridgeKind);
@@ -116,6 +127,7 @@ export default function Home() {
             sensorRef.current = s;
             setSensorSample(s);
             lastSensorTsRef.current = Date.now();
+            setReconnecting(false);
           });
           backoffRef.current = Math.max(500, Math.min(4000, backoffRef.current + 500));
         } catch {}
@@ -455,6 +467,25 @@ export default function Home() {
             </select>
           </label>
           <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+            <input
+              type="checkbox"
+              checked={convMode}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setConvMode(v);
+                if (v) {
+                  setUseStream(true);
+                  setOutputMode("voice");
+                } else {
+                  setUseStream(false);
+                  setOutputMode("text");
+                }
+              }}
+              disabled={privacyMode !== "cloud"}
+            />
+            Conversational Voice
+          </label>
+          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
             Privacy
             <select
               className="rounded border border-zinc-300 bg-transparent p-1 text-xs dark:border-zinc-700"
@@ -579,9 +610,34 @@ export default function Home() {
           </div>
           {glassesConnected && sensorSample && (
             <div className="text-xs text-zinc-500">
-              Glasses • motion {String(sensorSample.headMotion || "-")} • light {sensorSample.brightness != null ? `${Math.round(sensorSample.brightness * 100)}%` : "-"} • temp {sensorSample.temp != null ? `${sensorSample.temp.toFixed(1)}°C` : "-"} • engagement {engagement}
+              {reconnecting ? (
+                <span className="text-amber-600">Glasses • reconnecting…</span>
+              ) : (
+                <>
+                  Glasses • motion {String(sensorSample.headMotion || "-")} • light {sensorSample.brightness != null ? `${Math.round(sensorSample.brightness * 100)}%` : "-"} • temp {sensorSample.temp != null ? `${sensorSample.temp.toFixed(1)}°C` : "-"} • engagement {engagement}
+                </>
+              )}
             </div>
           )}
+
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              className="rounded-md border px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              onClick={async () => {
+                try { await fetch("/api/agent/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ improved: true }) }); } catch {}
+              }}
+            >
+              Helpful
+            </button>
+            <button
+              className="rounded-md border px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              onClick={async () => {
+                try { await fetch("/api/agent/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ falsePositive: true }) }); } catch {}
+              }}
+            >
+              Not relevant
+            </button>
+          </div>
 
           <div className="mt-2 text-xs text-zinc-500">Suggestions update as audio dynamics change.</div>
         </section>
