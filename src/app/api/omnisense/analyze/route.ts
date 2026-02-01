@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOmniContext } from "@/lib/omnisenseStore";
 import { allowRequest, coerceInsight, scoreConfidence } from "@/lib/validate";
 import { agentAddEvent } from "@/lib/agentStore";
+import { addPersonSeen } from "@/lib/memoryStore";
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,6 +38,12 @@ export async function POST(req: NextRequest) {
     const { systemInstruction, preferences, historySnippet } = getOmniContext();
     const system = overrideSystemInstruction || systemInstruction;
 
+    // Privacy enforcement
+    const privacy = preferences?.privacyMode || "cloud";
+    if (privacy === "off") {
+      return NextResponse.json({ error: "privacy_off" }, { status: 403 });
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
 
@@ -56,6 +63,24 @@ Instructions:
 - Avoid sensitive attribute inferences; do not mention biometrics or identity.
 `;
 
+    // If privacy local mode, avoid cloud calls, return heuristic demo insight
+    if (privacy === "local") {
+      const local = coerceInsight({
+        insight_type: "Strategic",
+        observation: "Local mode enabled — providing generic advice",
+        analysis: "Based on audio dynamics and transcript snippet only.",
+        action_recommendation: "Invite others, clarify owners/dates, and timebox decisions.",
+      });
+      local.confidence = 0.45;
+      agentAddEvent("insight", local);
+      // Memory: naive person extraction from transcript
+      if (transcript) {
+        const m = transcript.match(/[A-Z][a-z]+\s+[A-Z][a-z]+/g);
+        if (m) m.slice(0, 3).forEach((n: string) => addPersonSeen(n));
+      }
+      return NextResponse.json(local);
+    }
+
     const resp = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
     let text = resp.response.text().trim();
 
@@ -68,6 +93,10 @@ Instructions:
     const conf = await scoreConfidence(genAI, coerced);
     coerced.confidence = conf;
     agentAddEvent("insight", coerced);
+    if (transcript) {
+      const m = transcript.match(/[A-Z][a-z]+\s+[A-Z][a-z]+/g);
+      if (m) m.slice(0, 3).forEach((n: string) => addPersonSeen(n));
+    }
     return NextResponse.json(coerced);
   } catch (e) {
     return NextResponse.json({ error: "failed" }, { status: 500 });

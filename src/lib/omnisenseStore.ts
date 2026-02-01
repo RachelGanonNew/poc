@@ -57,7 +57,7 @@ function saveToDisk(ctx: OmniContext) {
 let store: OmniContext =
   loadFromDisk() || {
     systemInstruction: defaultSystemInstruction,
-    preferences: {},
+    preferences: { privacyMode: "cloud", outputMode: "text", enableMemory: true },
     historySnippet: "",
   };
 

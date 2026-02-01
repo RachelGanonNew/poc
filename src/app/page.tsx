@@ -27,6 +27,9 @@ export default function Home() {
   const [savingCtx, setSavingCtx] = useState(false);
   const [analyzeOut, setAnalyzeOut] = useState<string>("");
   const [analyzeConfidence, setAnalyzeConfidence] = useState<number | null>(null);
+  const [outputMode, setOutputMode] = useState<"text" | "voice">("text");
+  const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
+  const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -151,7 +154,12 @@ export default function Home() {
           });
           if (!res.ok) return;
           const j = await res.json();
-          if (!cancelled && j?.suggestion) setSuggestion(j.suggestion);
+          if (!cancelled && j?.suggestion) {
+            setSuggestion(j.suggestion);
+            if (outputMode === "voice" && j?.suggestion) {
+              speakRef.current?.speak(String(j.suggestion).slice(0, 180));
+            }
+          }
         }
       } catch {}
     }, 1000);
@@ -159,7 +167,7 @@ export default function Home() {
       cancelled = true;
       clearInterval(iv);
     };
-  }, [consented, paused, levels.rms, levels.speaking, interruption, useStream, notes]);
+  }, [consented, paused, levels.rms, levels.speaking, interruption, useStream, notes, outputMode]);
 
   // Load current backend context when trainer opens
   useEffect(() => {
@@ -172,9 +180,24 @@ export default function Home() {
         setSysInstr(j.systemInstruction || "");
         setPrefs(JSON.stringify(j.preferences || {}, null, 2));
         setHist(j.historySnippet || "");
+        if (j?.preferences?.outputMode) setOutputMode(j.preferences.outputMode);
+        if (j?.preferences?.privacyMode) setPrivacyMode(j.preferences.privacyMode);
       } catch {}
     })();
   }, [trainerOpen]);
+
+  // Load preferences at app start for header toggles
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/omnisense/context");
+        if (!res.ok) return;
+        const j = await res.json();
+        if (j?.preferences?.outputMode) setOutputMode(j.preferences.outputMode);
+        if (j?.preferences?.privacyMode) setPrivacyMode(j.preferences.privacyMode);
+      } catch {}
+    })();
+  }, []);
 
   const saveContext = async () => {
     try {
@@ -240,6 +263,25 @@ export default function Home() {
       console.error(e);
     }
   }, [tick]);
+
+  // Simple TTS helper when in voice mode
+  useEffect(() => {
+    speakRef.current = {
+      speak: (t: string) => {
+        try {
+          if (typeof window === "undefined") return;
+          if (!("speechSynthesis" in window)) return;
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(t);
+          u.rate = 1.0;
+          window.speechSynthesis.speak(u);
+        } catch {}
+      },
+      cancel: () => {
+        try { if (typeof window !== "undefined") window.speechSynthesis.cancel(); } catch {}
+      }
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -317,6 +359,41 @@ export default function Home() {
           <span className="text-sm">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
         </div>
         <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+            Output
+            <select
+              className="rounded border border-zinc-300 bg-transparent p-1 text-xs dark:border-zinc-700"
+              value={outputMode}
+              onChange={async (e) => {
+                const v = e.target.value as "text" | "voice";
+                setOutputMode(v);
+                try {
+                  await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) });
+                } catch {}
+              }}
+            >
+              <option value="text">Text</option>
+              <option value="voice">Voice</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+            Privacy
+            <select
+              className="rounded border border-zinc-300 bg-transparent p-1 text-xs dark:border-zinc-700"
+              value={privacyMode}
+              onChange={async (e) => {
+                const v = e.target.value as "off" | "local" | "cloud";
+                setPrivacyMode(v);
+                try {
+                  await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) });
+                } catch {}
+              }}
+            >
+              <option value="cloud">Cloud</option>
+              <option value="local">Local</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
           <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
             <input type="checkbox" checked={useStream} onChange={(e) => setUseStream(e.target.checked)} />
             Stream Mode

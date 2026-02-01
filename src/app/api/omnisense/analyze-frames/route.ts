@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOmniContext } from "@/lib/omnisenseStore";
 import { allowRequest, coerceInsight, scoreConfidence } from "@/lib/validate";
 import { agentAddEvent } from "@/lib/agentStore";
+import { addPersonSeen } from "@/lib/memoryStore";
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,7 +25,13 @@ export async function POST(req: NextRequest) {
     const { systemInstruction, preferences, historySnippet } = getOmniContext();
     const system = overrideSystemInstruction || systemInstruction;
 
-    if (!apiKey) {
+    // Privacy enforcement
+    const privacy = preferences?.privacyMode || "cloud";
+    if (privacy === "off") {
+      return NextResponse.json({ error: "privacy_off" }, { status: 403 });
+    }
+
+    if (!apiKey || privacy === "local") {
       const sample = coerceInsight({
         insight_type: "Logistical",
         observation: "Video frames suggest fragmented attention and side-chatter",
@@ -33,6 +40,10 @@ export async function POST(req: NextRequest) {
       });
       sample.confidence = 0.5;
       agentAddEvent("insight", { source: "frames-demo", transcript: transcript.slice(0, 200), ...sample });
+      if (transcript) {
+        const m = transcript.match(/[A-Z][a-z]+\s+[A-Z][a-z]+/g);
+        if (m) m.slice(0, 3).forEach((n: string) => addPersonSeen(n));
+      }
       return NextResponse.json(sample);
     }
 
