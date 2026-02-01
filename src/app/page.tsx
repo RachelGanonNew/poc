@@ -33,6 +33,7 @@ export default function Home() {
   const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
+  const [sensorSample, setSensorSample] = useState<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
   const sensorRef = useRef<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -63,10 +64,12 @@ export default function Home() {
       if (!bridgeRef.current) bridgeRef.current = createBridge("simulated");
       bridgeRef.current.start((s: SensorSample) => {
         sensorRef.current = s;
+        setSensorSample(s);
       });
     } else {
       bridgeRef.current?.stop();
       sensorRef.current = null;
+      setSensorSample(null);
     }
     return () => {
       bridgeRef.current?.stop();
@@ -479,6 +482,11 @@ export default function Home() {
           <div className="rounded-md border border-zinc-200 p-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
             {suggestion}
           </div>
+          {glassesConnected && sensorSample && (
+            <div className="text-xs text-zinc-500">
+              Glasses • motion {String(sensorSample.headMotion || "-")} • light {sensorSample.brightness != null ? `${Math.round(sensorSample.brightness * 100)}%` : "-"} • temp {sensorSample.temp != null ? `${sensorSample.temp.toFixed(1)}°C` : "-"}
+            </div>
+          )}
 
           <div className="mt-2 text-xs text-zinc-500">Suggestions update as audio dynamics change.</div>
         </section>
