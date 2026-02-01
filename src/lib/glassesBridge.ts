@@ -16,6 +16,8 @@ class SimulatedGlassesBridge implements GlassesBridge {
   // simple smoothing buffer
   private bBuf: number[] = [];
   private tBuf: number[] = [];
+  private lastMotion: SensorSample["headMotion"] = "steady";
+  private motionHold = 0;
 
   start(onSample: (s: SensorSample) => void) {
     if (this.running) return;
@@ -29,11 +31,17 @@ class SimulatedGlassesBridge implements GlassesBridge {
       if (this.tBuf.length > 4) this.tBuf.shift();
       const brightness = this.bBuf.reduce((a, c) => a + c, 0) / this.bBuf.length;
       const temp = this.tBuf.reduce((a, c) => a + c, 0) / this.tBuf.length;
-      const sample: SensorSample = {
-        headMotion: Math.random() > 0.8 ? "nod" : Math.random() > 0.8 ? "shake" : "steady",
-        brightness,
-        temp,
-      };
+      // head motion smoothing: hold current state for a few ticks
+      if (this.motionHold <= 0) {
+        const r = Math.random();
+        if (r > 0.9) this.lastMotion = "nod";
+        else if (r > 0.8) this.lastMotion = "shake";
+        else this.lastMotion = "steady";
+        this.motionHold = 2 + Math.floor(Math.random() * 3); // 2-4 ticks
+      } else {
+        this.motionHold -= 1;
+      }
+      const sample: SensorSample = { headMotion: this.lastMotion, brightness, temp };
       onSample(sample);
     }, 800);
   }
@@ -54,17 +62,26 @@ class SimulatedGlassesBridge implements GlassesBridge {
 class VendorXGlassesBridge implements GlassesBridge {
   private running = false;
   private timer: any = null;
+  private lastMotion: SensorSample["headMotion"] = "steady";
+  private motionHold = 0;
   start(onSample: (s: SensorSample) => void): void {
     if (this.running) return;
     this.running = true;
     // Placeholder: simulate pairing delay, then emit samples at a different cadence
     const startEmit = () => {
       this.timer = setInterval(() => {
-        const sample: SensorSample = {
-          headMotion: Math.random() > 0.9 ? "nod" : Math.random() > 0.9 ? "shake" : "steady",
-          brightness: 0.4 + Math.random() * 0.6,
-          temp: 21 + Math.random() * 4,
-        };
+        const brightness = 0.4 + Math.random() * 0.6;
+        const temp = 21 + Math.random() * 4;
+        if (this.motionHold <= 0) {
+          const r = Math.random();
+          if (r > 0.93) this.lastMotion = "nod";
+          else if (r > 0.86) this.lastMotion = "shake";
+          else this.lastMotion = "steady";
+          this.motionHold = 2 + Math.floor(Math.random() * 3);
+        } else {
+          this.motionHold -= 1;
+        }
+        const sample: SensorSample = { headMotion: this.lastMotion, brightness, temp };
         onSample(sample);
       }, 1000);
     };
