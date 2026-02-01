@@ -33,6 +33,8 @@ export default function Home() {
   const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
+  const [showGlassesModal, setShowGlassesModal] = useState(false);
+  const [bridgeKind, setBridgeKind] = useState<"simulated">("simulated");
   const [sensorSample, setSensorSample] = useState<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
   const sensorRef = useRef<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -61,7 +63,7 @@ export default function Home() {
   // Glasses bridge hookup (simulated for now)
   useEffect(() => {
     if (glassesConnected) {
-      if (!bridgeRef.current) bridgeRef.current = createBridge("simulated");
+      if (!bridgeRef.current) bridgeRef.current = createBridge(bridgeKind);
       bridgeRef.current.start((s: SensorSample) => {
         sensorRef.current = s;
         setSensorSample(s);
@@ -74,7 +76,7 @@ export default function Home() {
     return () => {
       bridgeRef.current?.stop();
     };
-  }, [glassesConnected]);
+  }, [glassesConnected, bridgeKind]);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -425,7 +427,13 @@ export default function Home() {
           </label>
           <button
             className={`rounded-md border px-3 py-1.5 text-sm ${glassesConnected ? "bg-emerald-600 text-white" : ""}`}
-            onClick={() => setGlassesConnected((v) => !v)}
+            onClick={() => {
+              if (glassesConnected) {
+                setGlassesConnected(false);
+              } else {
+                setShowGlassesModal(true);
+              }
+            }}
             title="Connect AI Glasses (simulated)"
           >
             {glassesConnected ? "Glasses: Connected" : "Connect Glasses"}
@@ -458,6 +466,41 @@ export default function Home() {
       </header>
 
       <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-2">
+        {showGlassesModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="w-full max-w-md rounded-xl bg-white p-5 text-black shadow-xl dark:bg-zinc-900 dark:text-zinc-50">
+              <h3 className="mb-3 text-lg font-semibold">Connect AI Glasses</h3>
+              <div className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">
+                Choose a device type to connect. Simulated adapter emits motion, light and temperature.
+              </div>
+              <label className="mb-4 block text-sm">
+                Adapter
+                <select
+                  className="mt-1 w-full rounded border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-700"
+                  value={bridgeKind}
+                  onChange={(e) => setBridgeKind("simulated")}
+                >
+                  <option value="simulated">Simulated</option>
+                </select>
+              </label>
+              <div className="mt-4 flex items-center justify-end gap-3">
+                <button className="rounded-md border px-3 py-1.5 text-sm dark:border-zinc-700" onClick={() => setShowGlassesModal(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="rounded-md bg-black px-3 py-1.5 text-sm text-white dark:bg-white dark:text-black"
+                  onClick={() => {
+                    setShowGlassesModal(false);
+                    // This will trigger the bridge effect with selected kind
+                    setGlassesConnected(true);
+                  }}
+                >
+                  Connect
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <section className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
           <video ref={videoRef} className="h-[280px] w-full rounded-lg bg-black object-cover" muted playsInline />
           <div className="mt-4">
