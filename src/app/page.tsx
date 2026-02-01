@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createBridge } from "../lib/glassesBridge";
 import type { GlassesBridge, SensorSample } from "../lib/glassesBridge";
+import { createLiveVoice } from "../lib/liveVoice";
 
 type Levels = {
   rms: number;
@@ -33,6 +34,7 @@ export default function Home() {
   const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
   const [convMode, setConvMode] = useState(false);
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
+  const liveRef = useRef<ReturnType<typeof createLiveVoice> | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
   const [showGlassesModal, setShowGlassesModal] = useState(false);
   const [bridgeKind, setBridgeKind] = useState<"simulated" | "vendorX">("simulated");
@@ -372,6 +374,22 @@ export default function Home() {
       }
     };
   }, []);
+
+  // Live voice lifecycle (scaffold): start when Conversational Voice is enabled and privacy is cloud
+  useEffect(() => {
+    const shouldLive = convMode && privacyMode === "cloud";
+    if (shouldLive) {
+      if (!liveRef.current) liveRef.current = createLiveVoice({ model: process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-3.0-pro" });
+      liveRef.current.start().catch(() => {});
+    } else {
+      liveRef.current?.stop().catch(() => {});
+      liveRef.current = null;
+    }
+    return () => {
+      liveRef.current?.stop().catch(() => {});
+      liveRef.current = null;
+    };
+  }, [convMode, privacyMode]);
 
   useEffect(() => {
     return () => {

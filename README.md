@@ -39,9 +39,29 @@ GEMINI_MODEL=gemini-3.0-pro
 - No raw audio/video persisted. Only brief context and settings stored in `.data/omni.json` for local use.
 - Prompts instruct Gemini to avoid sensitive attribute inference or identity claims.
 
+### Research Provider (Web Enrichment)
+- Endpoint: `GET /api/research?name=Full%20Name`
+- Behavior by privacy mode:
+  - `off`: blocked (403), no web calls.
+  - `local`: returns a local message; no outbound requests.
+  - `cloud`: uses Google Custom Search if configured, else falls back to Wikipedia.
+- Optional env vars to enable Google Search:
+  - `GOOGLE_API_KEY=...`
+  - `GOOGLE_CSE_ID=...`
+  - Without these, Wikipedia summary is used.
+
 ## Security
 - Basic per-IP rate limiting on analysis routes.
 - Schema coercion for outputs; Gemini self-check for confidence.
+
+## Optional Hybrid Mode: AI Glasses
+- Toggle via the "Connect Glasses" button in the header.
+- Adapters:
+  - Simulated: emits `headMotion`, `brightness`, `temp` for demos.
+  - Vendor X (placeholder): scaffolded adapter to wire a real SDK (Web Bluetooth/WebUSB/WebRTC).
+- When connected, live suggestions include `visionHints.sensors` for richer context.
+- A compact sensor debug line appears under Live Suggestions.
+- Privacy applies as usual; avoid sending raw sensor data in `local` mode.
 
 ## Submission Checklist (Devpost)
 - Public demo URL or interactive app: deploy to Vercel/Netlify and include link.
@@ -65,3 +85,16 @@ GEMINI_MODEL=gemini-3.0-pro
 3) Open Trainer, tweak system instruction → re-run `/api/evaluate`.
 
 For a detailed overview and demo script, see `SUBMISSION.md`.
+
+## Troubleshooting
+- Privacy modes
+  - Cloud: full features enabled.
+  - Local: no outbound web/model calls; endpoints return local heuristics.
+  - Off: analysis/research endpoints return 403.
+- No API keys
+  - Without `GEMINI_API_KEY`, analyze endpoints respond with safe demo insights for public demos.
+  - Without `GOOGLE_API_KEY` and `GOOGLE_CSE_ID`, `/api/research` falls back to Wikipedia.
+- Network/TLS issues
+  - Ensure outbound HTTPS (443) to Google APIs is allowed (VPN/Firewall can block).
+  - Retries/backoff/timeout are built in; transient errors usually resolve on retry.
+  - If a corporate network blocks requests, try a hotspot or whitelist the app.
