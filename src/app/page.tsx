@@ -46,6 +46,9 @@ export default function Home() {
   const [engagement, setEngagement] = useState<string>("-");
   const stableEngagementRef = useRef<string>("-");
   const [reconnecting, setReconnecting] = useState(false);
+  const detectBufRef = useRef<{ t: number; speaking: boolean; intensity: number; engagement: string }[]>([]);
+  const lastEmitRef = useRef<Record<string, number>>({});
+  const [detections, setDetections] = useState<{ t: number; kind: string; info?: string }[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -201,6 +204,43 @@ export default function Home() {
           visionHints: { scene: "meeting", sensors: sensorRef.current ? { ...sensorRef.current, engagement } : undefined },
           transcript: notes.slice(0, 220),
         };
+
+        // --- Temporal detectors (windowed over ~20s) ---
+        const nowTs = Date.now();
+        detectBufRef.current.push({ t: nowTs, speaking: levels.speaking, intensity: levels.rms, engagement });
+        // keep last 20 seconds
+        detectBufRef.current = detectBufRef.current.filter((p) => nowTs - p.t <= 20000);
+        const last10 = detectBufRef.current.filter((p) => nowTs - p.t <= 10000);
+        const speakCount10 = last10.filter((p) => p.speaking).length;
+        const avgRms10 = last10.length ? last10.reduce((a, c) => a + c.intensity, 0) / last10.length : 0;
+        const engag8 = detectBufRef.current.filter((p) => nowTs - p.t <= 8000).map((p) => p.engagement);
+
+        const cool = (k: string, ms: number) => {
+          const last = lastEmitRef.current[k] || 0;
+          return nowTs - last >= ms;
+        };
+        const mark = (k: string) => (lastEmitRef.current[k] = nowTs);
+        const emit = async (kind: string, info?: string) => {
+          setDetections((ds) => [{ t: nowTs, kind, info }, ...ds].slice(0, 8));
+          try { await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, at: nowTs, details: { info } }) }); } catch {}
+        };
+
+        // Dominance: speaking most of last 10s with higher average intensity
+        if (speakCount10 >= 8 && avgRms10 > 0.08 && cool("dominance", 30000)) {
+          mark("dominance");
+          await emit("dominance", `Speaking ${speakCount10}/10s, avgRMS ${avgRms10.toFixed(3)}`);
+        }
+        // Overlap: reuse interruption heuristic as a proxy
+        if (payload.audioDynamics.interruption && cool("overlap", 20000)) {
+          mark("overlap");
+          await emit("overlap", "Spike suggests speaking overlap/interruption");
+        }
+        // Engagement drop: sustained non-engaged cues
+        const disengaged = engag8.filter((e) => e === "disagreeing?" || e === "-").length;
+        if (disengaged >= 6 && cool("engagement_drop", 45000)) {
+          mark("engagement_drop");
+          await emit("engagement_drop", `Low engagement ${disengaged}/8s`);
+        }
 
         if (useStream) {
           const res = await fetch("/api/omnisense/analyze/stream", {
@@ -658,6 +698,25 @@ export default function Home() {
           </div>
 
           <div className="mt-2 text-xs text-zinc-500">Suggestions update as audio dynamics change.</div>
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold">Detections</h3>
+          {detections.length === 0 ? (
+            <div className="text-xs text-zinc-500">No recent detections.</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {detections.map((d, i) => (
+                <div key={`${d.t}-${i}`} className="flex items-center justify-between rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block rounded bg-zinc-100 px-2 py-0.5 font-medium dark:bg-zinc-800">{d.kind}</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">{d.info || ""}</span>
+                  </div>
+                  <span className="text-zinc-500">{new Date(d.t).toLocaleTimeString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="md:col-span-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
