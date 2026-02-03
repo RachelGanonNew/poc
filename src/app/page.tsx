@@ -49,6 +49,11 @@ export default function Home() {
   const detectBufRef = useRef<{ t: number; speaking: boolean; intensity: number; engagement: string }[]>([]);
   const lastEmitRef = useRef<Record<string, number>>({});
   const [detections, setDetections] = useState<{ t: number; kind: string; info?: string }[]>([]);
+  const [runGoal, setRunGoal] = useState("");
+  const [runResult, setRunResult] = useState<string>("");
+  const [audit, setAudit] = useState<{ session?: any; tasks?: any[]; verifySteps?: any[]; logs?: any[] } | null>(null);
+  const [auditMsg, setAuditMsg] = useState<string>("");
+  const coachLastRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -222,7 +227,38 @@ export default function Home() {
         const mark = (k: string) => (lastEmitRef.current[k] = nowTs);
         const emit = async (kind: string, info?: string) => {
           setDetections((ds) => [{ t: nowTs, kind, info }, ...ds].slice(0, 8));
-          try { await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, at: nowTs, details: { info } }) }); } catch {}
+          try {
+            await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, at: nowTs, details: { info } }) });
+          } catch {}
+          // Trigger autonomous agent step with concise observation
+          try {
+            const observation = {
+              detection: { kind, info, at: nowTs },
+              audio: { speaking: levels.speaking, rms: Number(levels.rms.toFixed(3)) },
+              sensors: sensorRef.current ? { ...sensorRef.current, engagement } : { engagement },
+              transcript: notes.slice(0, 160),
+            };
+            await fetch("/api/agent/act", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ observation, maxTools: 2 }) });
+          } catch {}
+
+          // Real-time coaching (cooldown 12s) only when allowed
+          try {
+            const now = Date.now();
+            if (privacyMode !== "cloud") return;
+            if (!(convMode || outputMode === "voice")) return;
+            if (now - (coachLastRef.current || 0) < 12000) return;
+            coachLastRef.current = now;
+
+            let msg = "";
+            if (kind === "dominance") msg = "Invite others briefly, then summarize next steps.";
+            else if (kind === "overlap") msg = "Quick pause. Offer the floor and clarify one speaker at a time.";
+            else if (kind === "engagement_drop") msg = "Pulse check: ask one open question to re-engage.";
+            if (!msg) return;
+
+            // Prefer Live if available, else TTS
+            if (liveRef.current) await liveRef.current.say(msg).catch(() => {});
+            else speakRef.current?.speak(msg);
+          } catch {}
         };
 
         // Dominance: speaking most of last 10s with higher average intensity
@@ -716,6 +752,96 @@ export default function Home() {
                 </div>
               ))}
             </div>
+          )}
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold">Autonomous Run</h3>
+          <div className="flex items-center gap-2">
+            <input
+              className="flex-1 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
+              placeholder="Goal (e.g., Prepare follow-up plan for the meeting)"
+              value={runGoal}
+              onChange={(e) => setRunGoal(e.target.value)}
+            />
+            <button
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+              disabled={!runGoal.trim()}
+              onClick={async () => {
+                setRunResult("Running...");
+                try {
+                  const res = await fetch("/api/agent/run", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ goal: runGoal.trim(), steps: 3, maxToolsPerStep: 2 }),
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json?.error || "failed");
+                  setRunResult(`ok: steps=${json.steps}, artifact=${json.artifact}`);
+                } catch (e: any) {
+                  setRunResult(`error: ${e?.message || String(e)}`);
+                }
+              }}
+            >
+              Run
+            </button>
+          </div>
+          {runResult && <div className="text-xs text-zinc-600 dark:text-zinc-400">{runResult}</div>}
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold">Verification / Audit</h3>
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+              onClick={async () => {
+                setAuditMsg("Loading timeline...");
+                try {
+                  const res = await fetch("/api/audit/timeline");
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json?.error || "failed");
+                  setAudit(json);
+                  setAuditMsg("");
+                } catch (e: any) {
+                  setAuditMsg(`error: ${e?.message || String(e)}`);
+                }
+              }}
+            >
+              Refresh Timeline
+            </button>
+            <button
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
+              onClick={async () => {
+                setAuditMsg("Exporting...");
+                try {
+                  const res = await fetch("/api/audit/report", { method: "POST" });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json?.error || "failed");
+                  setAuditMsg(`Exported: ${json.artifact}`);
+                } catch (e: any) {
+                  setAuditMsg(`error: ${e?.message || String(e)}`);
+                }
+              }}
+            >
+              Export HTML Report
+            </button>
+            {auditMsg && <div className="text-xs text-zinc-600 dark:text-zinc-400">{auditMsg}</div>}
+          </div>
+          {audit ? (
+            <div className="flex flex-col gap-2 text-xs">
+              <div className="text-zinc-600 dark:text-zinc-400">Tasks: {(audit.tasks || []).length} • Verify entries: {(audit.verifySteps || []).length} • Logs: {(audit.logs || []).length}</div>
+              <div className="flex flex-col gap-1">
+                {(audit.verifySteps || []).slice(-6).reverse().map((v:any, i:number) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="rounded bg-zinc-100 px-2 py-0.5 text-[10px] dark:bg-zinc-800">{new Date((v.ts||Date.now())).toLocaleTimeString()}</span>
+                    <span className={"text-[11px] font-medium " + (v.pass?"text-green-600":"text-red-500")}>{v.pass?"PASS":"FAIL"}</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">{String(v.claim||"").slice(0,120)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-500">No timeline loaded yet.</div>
           )}
         </section>
 

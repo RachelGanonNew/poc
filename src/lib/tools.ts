@@ -3,6 +3,7 @@ import path from "path";
 import { createResearchProvider } from "./research";
 import { logJsonl } from "./log";
 import { agentAddEvent } from "./agentStore";
+import { createTask, updateTaskStatus } from "./taskStore";
 
 export type ToolCall = {
   name: string;
@@ -124,6 +125,70 @@ export const Tools: ToolDef[] = [
     description: "Emit an internal agent event into the session timeline.",
     schema: { type: "object", properties: { kind: { type: "string" }, details: { type: "object" } }, required: ["kind"] },
     handler: handleAgentEvent,
+  },
+  {
+    name: "tasks.create",
+    description: "Create a task in the local task store with optional notes.",
+    schema: { type: "object", properties: { title: { type: "string" }, notes: { type: "string" } }, required: ["title"] },
+    handler: async (args) => {
+      try {
+        const t = createTask(String(args.title || "Untitled"), args.notes ? String(args.notes) : undefined);
+        agentAddEvent("system", { kind: "tasks.create", details: t });
+        return { name: "tasks.create", ok: true, result: t };
+      } catch (e: any) {
+        return { name: "tasks.create", ok: false, error: e?.message || String(e) };
+      }
+    },
+  },
+  {
+    name: "tasks.update_status",
+    description: "Update a task's status and optional notes.",
+    schema: { type: "object", properties: { id: { type: "string" }, status: { type: "string", enum: ["pending","in_progress","done","blocked"] }, notes: { type: "string" } }, required: ["id","status"] },
+    handler: async (args) => {
+      try {
+        const t = updateTaskStatus(String(args.id), String(args.status) as any, args.notes ? String(args.notes) : undefined);
+        if (!t) return { name: "tasks.update_status", ok: false, error: "not_found" };
+        agentAddEvent("system", { kind: "tasks.update_status", details: t });
+        return { name: "tasks.update_status", ok: true, result: t };
+      } catch (e: any) {
+        return { name: "tasks.update_status", ok: false, error: e?.message || String(e) };
+      }
+    },
+  },
+  {
+    name: "notes.write",
+    description: "Append a note line to the local notes file for audit/summary.",
+    schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
+    handler: async (args) => {
+      try {
+        const p = path.join(process.cwd(), ".data", "notes.md");
+        ensureData(p);
+        const line = `- ${new Date().toISOString()} ${String(args.text)}\n`;
+        fs.appendFileSync(p, line, { encoding: "utf8" });
+        agentAddEvent("system", { kind: "notes.write", details: { text: args.text } });
+        return { name: "notes.write", ok: true, result: true };
+      } catch (e: any) {
+        return { name: "notes.write", ok: false, error: e?.message || String(e) };
+      }
+    },
+  },
+  {
+    name: "agent.verify_step",
+    description: "Record a verification entry for the current step.",
+    schema: { type: "object", properties: { claim: { type: "string" }, evidence: { type: "string" }, pass: { type: "boolean" } }, required: ["claim","pass"] },
+    handler: async (args) => {
+      try {
+        const dir = path.join(process.cwd(), ".data", "verify");
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const file = path.join(dir, "steps.jsonl");
+        const rec = { ts: Date.now(), claim: String(args.claim), evidence: args.evidence ? String(args.evidence) : undefined, pass: !!args.pass };
+        fs.appendFileSync(file, JSON.stringify(rec) + "\n");
+        agentAddEvent("system", { kind: "agent.verify_step", details: rec });
+        return { name: "agent.verify_step", ok: true, result: true };
+      } catch (e: any) {
+        return { name: "agent.verify_step", ok: false, error: e?.message || String(e) };
+      }
+    },
   },
 ];
 

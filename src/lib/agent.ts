@@ -3,6 +3,7 @@ import { getOmniContext } from "./omnisenseStore";
 import { agentAddEvent, agentGet } from "./agentStore";
 import { toolsSchemaSummary, executeTool, ToolCall } from "./tools";
 import { logJsonl } from "./log";
+import { assembleLongContext } from "./context";
 
 export type AgentStepInput = {
   observation: Record<string, any>;
@@ -14,6 +15,8 @@ export type AgentStepOutput = {
   thoughts: string;
   toolCalls: Array<{ name: string; args: Record<string, any>; ok: boolean; result?: any; error?: string }>;
   final?: string;
+  level?: 1 | 2 | 3;
+  signature?: string;
 };
 
 export async function runAgentStep(input: AgentStepInput): Promise<AgentStepOutput> {
@@ -34,6 +37,7 @@ export async function runAgentStep(input: AgentStepInput): Promise<AgentStepOutp
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
 
+  const longCtx = assembleLongContext();
   const prompt = `${systemInstruction}
 
 You are an autonomous meeting and productivity agent. Given the observation, decide whether to call tools from the provided registry to achieve helpful outcomes. Prefer minimal, high-value actions.
@@ -45,6 +49,7 @@ Return ONLY JSON with keys: thoughts, tool_calls (array of {name,args}), final (
 Observation: ${JSON.stringify(input.observation)}
 Preferences: ${JSON.stringify(prefs)}
 Stats: ${JSON.stringify(stats)}
+LongContext: ${longCtx}
 `;
 
   const started = Date.now();
@@ -67,10 +72,23 @@ Stats: ${JSON.stringify(stats)}
     executed.push({ name: res.name, args: call.args || {}, ok: res.ok, result: res.result, error: res.error });
   }
 
+  // Thought signature and level selection
+  const okCount = executed.filter((e) => e.ok).length;
+  const level: 1 | 2 | 3 = okCount > 0 ? 1 : 2; // escalate if nothing succeeded
+  const signature = `obs:${Object.keys(input.observation||{}).slice(0,4).join(',')}|tools:${executed.map(e=>e.name).join('+')}|ok:${okCount}`;
+  logJsonl({ type: "thought_signature", level, signature });
+
+  // Basic self-check verification
+  try {
+    await executeTool({ name: "agent.verify_step", args: { claim: `Executed ${executed.length} tool(s) with ${okCount} success`, evidence: signature, pass: okCount > 0 } });
+  } catch {}
+
   const out: AgentStepOutput = {
     thoughts: String(parsed.thoughts || ""),
     toolCalls: executed,
     final: parsed.final ? String(parsed.final) : undefined,
+    level,
+    signature,
   };
 
   agentAddEvent("system", { kind: "agent.step", ms: Date.now() - started, output: out });
