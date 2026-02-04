@@ -144,3 +144,31 @@ For a detailed overview and demo script, see `SUBMISSION.md`.
 - Build: `npm run build` then `npm run start`.
 - Public demo: local-only features work without keys; full features require Cloud privacy mode and keys.
 
+## Architecture (High Level)
+
+```
+Browser (Next.js App)
+  ├─ Live mic/cam + temporal detectors (dominance/overlap/engagement)
+  ├─ Conversational Voice (Live) + TTS fallback
+  ├─ Panels: Detections • Autonomous Run • Verification/Audit
+  └─ Calls APIs: /api/agent/act, /api/agent/run, /api/audit/*
+
+Server (Next API Routes)
+  ├─ Agent Orchestrator
+  │   ├─ Build prompt with LongContext (session+logs+tasks)
+  │   ├─ Gemini 3 Pro call → tool_calls JSON
+  │   ├─ Execute Tools (function calling)
+  │   │   ├─ tasks.create / tasks.update_status
+  │   │   ├─ calendar.create_event • memory.write • notes.write
+  │   │   └─ web.search (Google CSE / Wikipedia)
+  │   ├─ Verification: agent.verify_step (JSONL + timeline)
+  │   └─ Thought Signatures & Levels (L1/L2; L3 escalation when needed)
+  ├─ Audit/Report: timeline, artifacts, latest report
+  └─ Stores (./.data): agent.json, agent.log, tasks.json, notes.md, verify/*
+
+Gemini 3 Pro (Google AI Studio)
+  └─ Reasoning over large context; returns structured tool calls
+```
+
+Level 3 escalation: If tools are attempted but none succeed, the agent documents uncertainty, emits an escalation event, and records a failed verification step. This is visible in the audit timeline and HTML report.
+

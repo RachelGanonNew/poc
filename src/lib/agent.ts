@@ -74,7 +74,7 @@ LongContext: ${longCtx}
 
   // Thought signature and level selection
   const okCount = executed.filter((e) => e.ok).length;
-  const level: 1 | 2 | 3 = okCount > 0 ? 1 : 2; // escalate if nothing succeeded
+  let level: 1 | 2 | 3 = okCount > 0 ? 1 : 2; // escalate if nothing succeeded
   const signature = `obs:${Object.keys(input.observation||{}).slice(0,4).join(',')}|tools:${executed.map(e=>e.name).join('+')}|ok:${okCount}`;
   logJsonl({ type: "thought_signature", level, signature });
 
@@ -82,6 +82,20 @@ LongContext: ${longCtx}
   try {
     await executeTool({ name: "agent.verify_step", args: { claim: `Executed ${executed.length} tool(s) with ${okCount} success`, evidence: signature, pass: okCount > 0 } });
   } catch {}
+
+  // Level 3 escalation: if Level 2 with attempted tools and no success, perform a cross-check and record escalation
+  if (level === 2 && executed.length > 0 && okCount === 0) {
+    level = 3;
+    try {
+      await executeTool({ name: "notes.write", args: { text: "Level 3 escalation: no successful tools; documenting uncertainty and requesting follow-up." } });
+    } catch {}
+    try {
+      await executeTool({ name: "agent.event", args: { kind: "agent.level3", details: { signature, toolCalls: executed.map(e=>e.name) } } });
+    } catch {}
+    try {
+      await executeTool({ name: "agent.verify_step", args: { claim: "Level 3 escalation executed (no successful tools)", evidence: signature, pass: false } });
+    } catch {}
+  }
 
   const out: AgentStepOutput = {
     thoughts: String(parsed.thoughts || ""),
