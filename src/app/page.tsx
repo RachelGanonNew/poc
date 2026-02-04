@@ -53,7 +53,10 @@ export default function Home() {
   const [runResult, setRunResult] = useState<string>("");
   const [audit, setAudit] = useState<{ session?: any; tasks?: any[]; verifySteps?: any[]; logs?: any[] } | null>(null);
   const [auditMsg, setAuditMsg] = useState<string>("");
+  const [auditFilter, setAuditFilter] = useState<"all" | "pass" | "fail">("all");
+  const [artifacts, setArtifacts] = useState<{ name: string; path: string }[]>([]);
   const coachLastRef = useRef<number>(0);
+  const [judgeMsg, setJudgeMsg] = useState<string>("");
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -621,6 +624,27 @@ export default function Home() {
             {trainerOpen ? "Close Trainer" : "Open Trainer"}
           </button>
           <button
+            className="rounded-md border border-emerald-600 px-3 py-1.5 text-sm text-emerald-700 dark:text-emerald-400"
+            title="One-click judge demo: run agent loop and export report"
+            onClick={async () => {
+              setJudgeMsg("Running judge demo...");
+              try {
+                const runRes = await fetch("/api/agent/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ goal: "Judge Demo: Prepare follow-up plan and assign owners", steps: 3, maxToolsPerStep: 2 }) });
+                const runJson = await runRes.json();
+                if (!runRes.ok) throw new Error(runJson?.error || "run failed");
+                const repRes = await fetch("/api/audit/report", { method: "POST" });
+                const repJson = await repRes.json();
+                if (!repRes.ok) throw new Error(repJson?.error || "export failed");
+                setJudgeMsg(`Demo complete. Report: ${repJson.artifact}`);
+              } catch (e: any) {
+                setJudgeMsg(`error: ${e?.message || String(e)}`);
+              }
+            }}
+          >
+            Start Judge Demo
+          </button>
+          {judgeMsg && <span className="text-xs text-emerald-700 dark:text-emerald-400">{judgeMsg}</span>}
+          <button
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
             onClick={() => {
               if (!consented) return;
@@ -825,19 +849,92 @@ export default function Home() {
             >
               Export HTML Report
             </button>
+            <button
+              className="rounded-md border border-emerald-600 px-3 py-1.5 text-sm text-emerald-700 dark:text-emerald-400"
+              title="Run a demo loop and export a report"
+              onClick={async () => {
+                setAuditMsg("Running demo...");
+                try {
+                  const runRes = await fetch("/api/agent/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ goal: "Prepare follow-up plan and assign owners", steps: 3, maxToolsPerStep: 2 }) });
+                  const runJson = await runRes.json();
+                  if (!runRes.ok) throw new Error(runJson?.error || "run failed");
+                  const repRes = await fetch("/api/audit/report", { method: "POST" });
+                  const repJson = await repRes.json();
+                  if (!repRes.ok) throw new Error(repJson?.error || "export failed");
+                  setAuditMsg(`Demo complete. Report: ${repJson.artifact}`);
+                } catch (e: any) {
+                  setAuditMsg(`error: ${e?.message || String(e)}`);
+                }
+              }}
+            >
+              Demo: Run + Export
+            </button>
             {auditMsg && <div className="text-xs text-zinc-600 dark:text-zinc-400">{auditMsg}</div>}
           </div>
           {audit ? (
             <div className="flex flex-col gap-2 text-xs">
               <div className="text-zinc-600 dark:text-zinc-400">Tasks: {(audit.tasks || []).length} • Verify entries: {(audit.verifySteps || []).length} • Logs: {(audit.logs || []).length}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px]">Filter:</span>
+                <button className={`rounded border px-2 py-0.5 text-[11px] ${auditFilter === "all" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`} onClick={() => setAuditFilter("all")}>All</button>
+                <button className={`rounded border px-2 py-0.5 text-[11px] ${auditFilter === "pass" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`} onClick={() => setAuditFilter("pass")}>PASS</button>
+                <button className={`rounded border px-2 py-0.5 text-[11px] ${auditFilter === "fail" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`} onClick={() => setAuditFilter("fail")}>FAIL</button>
+              </div>
               <div className="flex flex-col gap-1">
-                {(audit.verifySteps || []).slice(-6).reverse().map((v:any, i:number) => (
+                {(audit.verifySteps || [])
+                  .filter((v:any)=> auditFilter === "all" ? true : (auditFilter === "pass" ? !!v.pass : v.pass === false))
+                  .slice(-6)
+                  .reverse()
+                  .map((v:any, i:number) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="rounded bg-zinc-100 px-2 py-0.5 text-[10px] dark:bg-zinc-800">{new Date((v.ts||Date.now())).toLocaleTimeString()}</span>
                     <span className={"text-[11px] font-medium " + (v.pass?"text-green-600":"text-red-500")}>{v.pass?"PASS":"FAIL"}</span>
                     <span className="text-zinc-600 dark:text-zinc-400">{String(v.claim||"").slice(0,120)}</span>
                   </div>
                 ))}
+              </div>
+              {audit.session?.events && (
+                <div className="mt-2">
+                  <div className="mb-1 text-[11px] font-semibold">Recent Tool Calls</div>
+                  <div className="flex flex-col gap-1">
+                    {audit.session.events.slice(-8).reverse().map((ev:any, idx:number)=>{
+                      const tc = ev?.data?.output?.toolCalls || [];
+                      if (!tc.length) return null;
+                      return (
+                        <div key={idx} className="flex items-center gap-2 text-[11px]">
+                          <span className="rounded bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">{new Date(ev.t).toLocaleTimeString()}</span>
+                          <span className="text-zinc-600 dark:text-zinc-400">{tc.map((x:any)=>x.name).join(", ")}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="mt-2">
+                <div className="mb-1 text-[11px] font-semibold">Artifacts</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="rounded-md border border-zinc-300 px-2 py-1 text-[11px] dark:border-zinc-700"
+                    onClick={async ()=>{
+                      try {
+                        const res = await fetch("/api/audit/artifacts");
+                        const j = await res.json();
+                        if (res.ok) setArtifacts(j.items || []);
+                      } catch {}
+                    }}
+                  >
+                    Refresh
+                  </button>
+                  <div className="text-[11px] text-zinc-500">Shows local file paths</div>
+                </div>
+                <div className="mt-1 flex flex-col gap-1 text-[11px]">
+                  {artifacts.length === 0 ? <div className="text-zinc-500">No artifacts yet.</div> : artifacts.slice(-10).reverse().map((a,i)=> (
+                    <div key={i} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{a.name}</span>
+                      <span className="text-zinc-500 truncate max-w-[50%]" title={a.path}>{a.path}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
