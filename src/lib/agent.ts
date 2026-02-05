@@ -54,8 +54,28 @@ LongContext: ${longCtx}
 `;
 
   const started = Date.now();
-  const resp = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
-  let text = resp.response.text().trim();
+  // Resilient call with retry/backoff
+  async function callWithRetry(attempts = 3): Promise<string> {
+    let delay = 250;
+    let lastErr: any = null;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const resp = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+        return resp.response.text().trim();
+      } catch (e: any) {
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, delay + Math.floor(Math.random() * 100)));
+        delay = Math.min(2000, delay * 2);
+      }
+    }
+    // Log failure and emit verification FAIL
+    agentAddEvent("system", { kind: "agent.error", details: { where: "runAgentStep.generateContent", error: String(lastErr?.message || lastErr) } });
+    try { await executeTool({ name: "agent.verify_step", args: { claim: "Model call failed after retries", evidence: "generateContent", pass: false } }); } catch {}
+    // Return graceful degraded output to keep run consistent
+    return JSON.stringify({ thoughts: "Model unreachable, deferring actions.", tool_calls: [], final: "degraded" });
+  }
+
+  let text = await callWithRetry(3);
   const s = text.indexOf("{");
   const e = text.lastIndexOf("}");
   if (s >= 0 && e > s) text = text.slice(s, e + 1);
