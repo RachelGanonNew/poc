@@ -28,8 +28,26 @@ export async function POST(req: NextRequest) {
 
     const sys = `You author short-lived, safe, verifiable policies for a daily-assistant. Output JSON with keys: id,intent,triggers,actions,safeguards,verify,ttlMs,priority. Avoid medical or sensitive-inference scopes.`;
     const prompt = `${sys}\nIntent: ${intent}\nReturn ONLY JSON.`;
-    const resp = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
-    let text = resp.response.text().trim();
+
+    async function callWithRetry(attempts = 3): Promise<string> {
+      let delay = 250;
+      let lastErr: any = null;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const resp = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+          return resp.response.text().trim();
+        } catch (e: any) {
+          lastErr = e;
+          await new Promise((r) => setTimeout(r, delay + Math.floor(Math.random() * 100)));
+          delay = Math.min(2000, delay * 2);
+        }
+      }
+      // Fallback skeleton proposal
+      const id = `pol_${Math.random().toString(36).slice(2,8)}`;
+      return JSON.stringify({ id, intent: String(intent), triggers: { anyTrue: [{ path: "conflict_suspected" }] }, actions: [{ name: "notes.write", args: { text: `Policy ${id}: ${String(intent)}` } }], safeguards: { cooldownMs: 300000, privacy: "cloud" }, verify: { claim: `Policy ${id} executed` }, ttlMs: 24*60*60*1000, priority: 1 });
+    }
+
+    let text = await callWithRetry(3);
     const s = text.indexOf("{");
     const e = text.lastIndexOf("}");
     if (s >= 0 && e > s) text = text.slice(s, e + 1);
