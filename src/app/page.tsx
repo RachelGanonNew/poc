@@ -752,24 +752,7 @@ export default function Home() {
           <div className="mt-2 text-xs text-slate-400">Suggestions update as audio dynamics change.</div>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-          <h3 className="text-lg font-semibold">Detections</h3>
-          {detections.length === 0 ? (
-            <div className="text-xs text-slate-400">No recent detections.</div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {detections.map((d, i) => (
-                <div key={`${d.t}-${i}`} className="flex items-center justify-between rounded-md border border-white/10 p-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block rounded bg-white/10 px-2 py-0.5 font-medium">{d.kind}</span>
-                    <span className="text-slate-300">{d.info || ""}</span>
-                  </div>
-                  <span className="text-slate-400">{new Date(d.t).toLocaleTimeString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        
 
         <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <h3 className="text-lg font-semibold">Autonomous Run</h3>
