@@ -509,7 +509,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-50">
+    <div className="min-h-screen w-full bg-gradient-to-b from-slate-950 to-slate-900 text-slate-100">
       {!consented && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 text-black shadow-xl dark:bg-zinc-900 dark:text-zinc-50">
@@ -538,6 +538,14 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Hero banner */}
+      <div className="mx-auto w-full max-w-6xl px-6 pt-6">
+        <div className="rounded-2xl bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 p-6 shadow-2xl">
+          <h1 className="text-3xl font-bold drop-shadow-sm">OmniSense</h1>
+          <p className="mt-1 text-sm text-fuchsia-50/90">AI-Powered Social Insight Analysis</p>
+        </div>
+      </div>
 
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
@@ -681,34 +689,39 @@ export default function Home() {
             </div>
           </div>
         )}
-        <section className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 video-container">
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur video-container">
+          <h3 className="mb-3 text-lg font-semibold">Live Webcam Stream</h3>
           <video ref={videoRef} className="h-[280px] w-full rounded-lg bg-black object-cover" muted playsInline />
           <div className="mt-4">
-            <div className="mb-2 text-sm font-medium">Speaking intensity</div>
-            <div className="h-3 w-full rounded-full bg-zinc-200 dark:bg-zinc-800">
+            <button
+              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+              onClick={async ()=>{ setConsented(true); await start(); }}
+            >Start Camera</button>
+            <div className="mt-4 mb-2 text-sm font-medium">Speaking intensity</div>
+            <div className="h-3 w-full rounded-full bg-slate-800">
               <div
                 className="h-3 rounded-full bg-emerald-500 transition-[width] duration-75"
                 style={{ width: `${intensityPct}%` }}
               />
             </div>
-            <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">You spoke ~{speakingSeconds}s</div>
+            <div className="mt-2 text-xs text-slate-300">You spoke ~{speakingSeconds}s</div>
           </div>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 suggestions-container">
+        <section className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur suggestions-container">
           <h3 className="text-lg font-semibold">Live Suggestions</h3>
           {interruption && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+            <div className="rounded-md border border-amber-700/50 bg-amber-900/30 p-3 text-amber-200">
               {interruption}
             </div>
           )}
-          <div className="rounded-md border border-zinc-200 p-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+          <div className="rounded-md border border-white/10 p-3 text-sm text-slate-200">
             {suggestion}
           </div>
           {glassesConnected && sensorSample && (
-            <div className="text-xs text-zinc-500">
+            <div className="text-xs text-slate-400">
               {reconnecting ? (
-                <span className="text-amber-600">Glasses • reconnecting…</span>
+                <span className="text-amber-400">Glasses • reconnecting…</span>
               ) : (
                 <>
                   Glasses • motion {String(sensorSample.headMotion || "-")} • light {sensorSample.brightness != null ? `${Math.round(sensorSample.brightness * 100)}%` : "-"} • temp {sensorSample.temp != null ? `${sensorSample.temp.toFixed(1)}°C` : "-"} • engagement {engagement}
@@ -719,7 +732,7 @@ export default function Home() {
 
           <div className="mt-1 flex items-center gap-2">
             <button
-              className="rounded-md border px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/10"
               onClick={async () => {
                 try { await fetch("/api/agent/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ improved: true }) }); } catch {}
               }}
@@ -727,7 +740,7 @@ export default function Home() {
               Helpful
             </button>
             <button
-              className="rounded-md border px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/10"
               onClick={async () => {
                 try { await fetch("/api/agent/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ falsePositive: true }) }); } catch {}
               }}
@@ -736,22 +749,22 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="mt-2 text-xs text-zinc-500">Suggestions update as audio dynamics change.</div>
+          <div className="mt-2 text-xs text-slate-400">Suggestions update as audio dynamics change.</div>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <section className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
           <h3 className="text-lg font-semibold">Detections</h3>
           {detections.length === 0 ? (
-            <div className="text-xs text-zinc-500">No recent detections.</div>
+            <div className="text-xs text-slate-400">No recent detections.</div>
           ) : (
             <div className="flex flex-col gap-2">
               {detections.map((d, i) => (
-                <div key={`${d.t}-${i}`} className="flex items-center justify-between rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800">
+                <div key={`${d.t}-${i}`} className="flex items-center justify-between rounded-md border border-white/10 p-2 text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="inline-block rounded bg-zinc-100 px-2 py-0.5 font-medium dark:bg-zinc-800">{d.kind}</span>
-                    <span className="text-zinc-600 dark:text-zinc-400">{d.info || ""}</span>
+                    <span className="inline-block rounded bg-white/10 px-2 py-0.5 font-medium">{d.kind}</span>
+                    <span className="text-slate-300">{d.info || ""}</span>
                   </div>
-                  <span className="text-zinc-500">{new Date(d.t).toLocaleTimeString()}</span>
+                  <span className="text-slate-400">{new Date(d.t).toLocaleTimeString()}</span>
                 </div>
               ))}
             </div>
