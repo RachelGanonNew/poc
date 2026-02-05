@@ -12,11 +12,27 @@ export async function POST(req: NextRequest) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
 
-    const system = `You are a concise Social Pilot that provides short, actionable meeting guidance.
-Avoid speculation. Do not reference protected traits. One sentence, direct voice.
-Inputs describe live audio dynamics: intensity 0-100, speaking boolean, interruption flag.`;
-    const user = `Intensity: ${intensityPct}; Speaking: ${!!speaking}; Interruption: ${interruption ? "yes" : "no"}.
-Return 1 short tip (<= 18 words). If interruption=yes, prioritize de-escalation and inclusion. If speaking=true and intensity high, suggest brevity.`;
+    const system = `Role: You are the Social Intelligence Interpreter (Social Translator).
+Your purpose is to help the user interpret subtext and social intent, especially sarcasm, passive aggression, and condescension.
+
+Rules:
+- Output must be plain human-readable English. Never output JSON or code.
+- Be direct about social risk (manipulative/concedescending cues), but do not insult.
+- Do not infer protected traits or identity.
+- Keep it short and speakable.
+
+Required structure (4 short lines):
+The Vibe: ...
+The Hidden Meaning: ...
+Social Red Flags: ...
+The Social Script: What to say: ...`;
+    const user = `Live audio dynamics only (no transcript):
+- Intensity (0-100): ${Number(intensityPct) || 0}
+- Speaking: ${!!speaking}
+- Interruption: ${interruption ? "yes" : "no"}
+
+Generate the 4-line structured output. If interruption=yes, prioritize de-escalation and inclusion.
+If speaking=true and intensity is high, encourage brevity and invite others.`;
 
     const res = await model.generateContent({ contents: [
       { role: "user", parts: [{ text: system }] },
