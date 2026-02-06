@@ -47,6 +47,10 @@ export default function Home() {
   const [detections, setDetections] = useState<{ t: number; kind: string; info?: string }[]>([]);
   const [runGoal, setRunGoal] = useState("");
   const [runResult, setRunResult] = useState<string>("");
+  const [autoRunGoal, setAutoRunGoal] = useState<boolean>(true);
+  const [autoNotes, setAutoNotes] = useState<boolean>(true);
+  const lastRunGoalEditRef = useRef<number>(0);
+  const lastNotesEditRef = useRef<number>(0);
   const [audit, setAudit] = useState<{ session?: any; tasks?: any[]; verifySteps?: any[]; logs?: any[] } | null>(null);
   const [auditMsg, setAuditMsg] = useState<string>("");
   const [auditFilter, setAuditFilter] = useState<"all" | "pass" | "fail">("all");
@@ -172,12 +176,84 @@ export default function Home() {
 
   const closeApp = useCallback(() => {
     try { teardown(); } catch {}
+    try { fetch("/api/agent/stop", { method: "POST" }).catch(() => {}); } catch {}
     setConsented(false);
     setPaused(false);
     setDemoMode(false);
     setMobileSidebarOpen(false);
     setAppClosed(true);
   }, [teardown]);
+
+  useEffect(() => {
+    if (!consented || paused || demoMode || privacyMode === "off") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await fetch("/api/agent/status");
+        const j = await s.json().catch(() => ({}));
+        if (!cancelled && !j?.active) {
+          await fetch("/api/agent/start", { method: "POST" });
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [consented, paused, demoMode, privacyMode]);
+
+  useEffect(() => {
+    if (!consented || paused || demoMode || privacyMode === "off") return;
+    if (!autoRunGoal && !autoNotes) return;
+    let cancelled = false;
+
+    const applyDraft = async () => {
+      try {
+        const s = await fetch("/api/agent/status");
+        const sj = await s.json().catch(() => ({}));
+        if (!sj?.active) {
+          await fetch("/api/agent/start", { method: "POST" });
+        }
+
+        const r = await fetch("/api/agent/report");
+        const j = await r.json();
+        if (!r.ok) return;
+
+        const risks: string[] = Array.isArray(j?.risks) ? j.risks : [];
+        const actions: Array<{ title?: string; owner?: string; due?: string }> = Array.isArray(j?.actions) ? j.actions : [];
+        const lastInsights = Array.isArray(j?.outline?.insights) ? j.outline.insights : [];
+
+        const topRisk = risks[0] || "";
+        const lastAction = actions[0]?.title ? String(actions[0].title) : "";
+        const insightHint = lastInsights.length ? String(lastInsights[lastInsights.length - 1]?.observation || "") : "";
+
+        const goalDraft = [
+          "Stay aligned in the conversation.",
+          topRisk ? `Mitigate: ${topRisk}.` : "",
+          lastAction ? `End with: ${lastAction}.` : "",
+        ].filter(Boolean).join(" ").slice(0, 140);
+
+        const notesDraft = [
+          topRisk ? `Risk: ${topRisk}` : "",
+          insightHint ? `Signal: ${insightHint}` : "",
+          actions.length
+            ? "Follow-ups:\n" + actions.slice(0, 5).map((a) => `- ${String(a?.title || "").trim()}`).filter(Boolean).join("\n")
+            : "",
+        ].filter(Boolean).join("\n").slice(0, 1200);
+
+        if (cancelled) return;
+
+        if (autoRunGoal) setRunGoal(goalDraft);
+        if (autoNotes) setNotes(notesDraft);
+      } catch {}
+    };
+
+    applyDraft();
+    const iv = window.setInterval(applyDraft, 12000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(iv);
+    };
+  }, [consented, paused, demoMode, privacyMode, autoRunGoal, autoNotes]);
 
   // Demo Mode: scripted showcase without requiring camera/mic
   useEffect(() => {
@@ -882,8 +958,17 @@ export default function Home() {
               className="flex-1 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
               placeholder="Goal (e.g., Prepare follow-up plan for the meeting)"
               value={runGoal}
-              onChange={(e) => setRunGoal(e.target.value)}
+              onChange={(e) => {
+                lastRunGoalEditRef.current = Date.now();
+                setAutoRunGoal(false);
+                setRunGoal(e.target.value);
+              }}
             />
+            {!autoRunGoal && (
+              <button className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700" onClick={() => setAutoRunGoal(true)}>
+                Resume auto
+              </button>
+            )}
             <button
               className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
               disabled={!runGoal.trim()}
@@ -917,9 +1002,18 @@ export default function Home() {
             className="w-full min-h-28 rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
             placeholder="Paste brief meeting notes (or type key commitments)..."
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(e) => {
+              lastNotesEditRef.current = Date.now();
+              setAutoNotes(false);
+              setNotes(e.target.value);
+            }}
           />
           <div className="mt-3 flex items-center gap-3">
+            {!autoNotes && (
+              <button className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700" onClick={() => setAutoNotes(true)}>
+                Resume auto
+              </button>
+            )}
             <button
               className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-white dark:text-black"
               onClick={extractActions}
