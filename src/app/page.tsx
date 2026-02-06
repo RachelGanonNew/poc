@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createBridge } from "../lib/glassesBridge";
 import type { GlassesBridge, SensorSample } from "../lib/glassesBridge";
-import { createLiveVoice } from "../lib/liveVoice";
 import UserJourneyStatus from "../components/UserJourneyStatus";
 
 type Levels = {
@@ -23,7 +22,6 @@ export default function Home() {
   const [summary, setSummary] = useState<string>("");
   const [actions, setActions] = useState<Array<any>>([]);
   const [extracting, setExtracting] = useState(false);
-  const [useStream, setUseStream] = useState(true);
   const [sysInstr, setSysInstr] = useState<string>("");
   const [prefs, setPrefs] = useState<string>("{}");
   const [hist, setHist] = useState<string>("");
@@ -32,9 +30,7 @@ export default function Home() {
   const [analyzeConfidence, setAnalyzeConfidence] = useState<number | null>(null);
   const [outputMode, setOutputMode] = useState<"text" | "voice">("text");
   const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
-  const [convMode, setConvMode] = useState(false);
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
-  const liveRef = useRef<ReturnType<typeof createLiveVoice> | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
   const [showGlassesModal, setShowGlassesModal] = useState(false);
   const [bridgeKind, setBridgeKind] = useState<"simulated" | "vendorX">("simulated");
@@ -60,6 +56,7 @@ export default function Home() {
   const [demoMode, setDemoMode] = useState<boolean>(false);
   const [appClosed, setAppClosed] = useState<boolean>(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+  const [showMonitorToast, setShowMonitorToast] = useState<boolean>(false);
   const suggestionBeforeDemoRef = useRef<string>("");
   const demoIntervalRef = useRef<number | null>(null);
   const [showDemo, setShowDemo] = useState<boolean>(false);
@@ -304,7 +301,7 @@ export default function Home() {
           try {
             const now = Date.now();
             if (privacyMode !== "cloud") return;
-            if (!(convMode || outputMode === "voice")) return;
+            if (outputMode !== "voice") return;
             if (now - (coachLastRef.current || 0) < 12000) return;
             coachLastRef.current = now;
 
@@ -314,9 +311,7 @@ export default function Home() {
             else if (kind === "engagement_drop") msg = "Pulse check: ask one open question to re-engage.";
             if (!msg) return;
 
-            // Prefer Live if available, else TTS
-            if (liveRef.current) await liveRef.current.say(msg).catch(() => {});
-            else speakRef.current?.speak(msg);
+            speakRef.current?.speak(msg);
           } catch {}
         };
 
@@ -491,21 +486,21 @@ export default function Home() {
     };
   }, []);
 
-  // Live voice lifecycle (scaffold): start when Conversational Voice is enabled and privacy is cloud
   useEffect(() => {
-    const shouldLive = convMode && privacyMode === "cloud";
-    if (shouldLive) {
-      if (!liveRef.current) liveRef.current = createLiveVoice({ model: process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-3.0-pro" });
-      liveRef.current.start().catch(() => {});
-    } else {
-      liveRef.current?.stop().catch(() => {});
-      liveRef.current = null;
-    }
+    if (!consented || paused || privacyMode === "off" || outputMode !== "text") return;
+    let cancelled = false;
+    const iv = window.setInterval(() => {
+      if (cancelled) return;
+      setShowMonitorToast(true);
+      window.setTimeout(() => {
+        if (!cancelled) setShowMonitorToast(false);
+      }, 2200);
+    }, 9000);
     return () => {
-      liveRef.current?.stop().catch(() => {});
-      liveRef.current = null;
+      cancelled = true;
+      window.clearInterval(iv);
     };
-  }, [convMode, privacyMode]);
+  }, [consented, paused, privacyMode, outputMode]);
 
   useEffect(() => {
     return () => {
@@ -558,9 +553,6 @@ export default function Home() {
               <button className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white" onClick={() => setAppClosed(false)}>
                 Re-open
               </button>
-              <button className="rounded-md border border-slate-300 px-4 py-2 text-sm" onClick={() => setSidebarOpen(true)}>
-                Show settings
-              </button>
             </div>
           </div>
         </div>
@@ -602,47 +594,25 @@ export default function Home() {
         className={`fixed left-0 top-0 z-40 hidden h-screen border-r border-slate-200 bg-white/90 backdrop-blur md:block ${sidebarOpen ? "w-72" : "w-14"}`}
       >
         <div className="flex h-full flex-col p-2">
-          <button
-            className="mb-2 flex h-10 w-full items-center justify-center rounded-md border border-slate-200 bg-white text-sm hover:bg-slate-50"
-            onClick={() => setSidebarOpen((v) => !v)}
-            title={sidebarOpen ? "Collapse" : "Expand"}
-          >
-            ≡
-          </button>
-
-          {sidebarOpen && (
-            <>
-              <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                <div className="mb-3 flex items-center gap-2">
-                  <div className={`h-2.5 w-2.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  <span className="text-xs text-slate-700">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
-                </div>
-                <button className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500" onClick={async ()=>{ setAppClosed(false); setConsented(true); await start(); }}>Start Camera</button>
-              </div>
+          <div className="flex-1">
+            {sidebarOpen && (
+              <>
 
               <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                 <h3 className="mb-3 text-sm font-semibold text-slate-900">Settings</h3>
                 <div className="space-y-4 text-sm">
                   <label className="flex items-center justify-between gap-3">
-                    <span className="text-slate-700">Output</span>
-                    <select className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 px-3 py-1.5 text-xs text-white shadow" value={outputMode} onChange={async (e)=>{ const v = e.target.value as "text"|"voice"; setOutputMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) }); } catch {} }}>
+                    <span className="text-slate-700">Response format</span>
+                    <select className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs" value={outputMode} onChange={async (e)=>{ const v = e.target.value as "text"|"voice"; setOutputMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) }); } catch {} }}>
                       <option value="text" className="text-gray-800">Text</option>
                       <option value="voice" className="text-gray-800">Voice</option>
                     </select>
                   </label>
                   <label className="flex items-center justify-between gap-3">
-                    <span className="text-slate-700">Conversational Voice</span>
-                    <input type="checkbox" checked={convMode} onChange={(e)=>{ const v=e.target.checked; setConvMode(v); if (v){ setUseStream(true); setOutputMode("voice"); } else { setUseStream(false); setOutputMode("text"); } }} disabled={privacyMode!=="cloud"} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
-                  </label>
-                  <label className="flex items-center justify-between gap-3">
                     <span className="text-slate-700">Privacy</span>
                     <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
                   </label>
-                  <label className="flex items-center justify-between gap-3">
-                    <span className="text-slate-700">Stream Mode</span>
-                    <span className="text-xs text-slate-500">Always on</span>
-                  </label>
-                  <button className={`w-full rounded-md px-3 py-2 text-sm font-medium text-white ${glassesConnected?"bg-emerald-600 hover:bg-emerald-500":"bg-indigo-600 hover:bg-indigo-500"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
+                  <button className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 ${glassesConnected ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-900"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
                   <button className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={closeApp}>Close App</button>
                 </div>
               </div>
@@ -679,8 +649,17 @@ export default function Home() {
                   </div>
                 </div>
               )}
-            </>
-          )}
+              </>
+            )}
+          </div>
+
+          <button
+            className="mt-2 flex h-10 w-full items-center justify-center rounded-md border border-slate-200 bg-white text-sm hover:bg-slate-50"
+            onClick={() => setSidebarOpen((v) => !v)}
+            title={sidebarOpen ? "Collapse" : "Expand"}
+          >
+            {sidebarOpen ? "«" : "»"}
+          </button>
         </div>
       </aside>
 
@@ -701,26 +680,15 @@ export default function Home() {
                 <div className={`h-2.5 w-2.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-400"}`} />
                 <span className="text-xs text-slate-700">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
               </div>
-              <button
-                className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-                onClick={async () => {
-                  setAppClosed(false);
-                  setConsented(true);
-                  setMobileSidebarOpen(false);
-                  await start();
-                }}
-              >
-                Start Camera
-              </button>
             </div>
 
             <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
               <h3 className="mb-3 text-sm font-semibold text-slate-900">Settings</h3>
               <div className="space-y-4 text-sm">
                 <label className="flex items-center justify-between gap-3">
-                  <span className="text-slate-700">Output</span>
+                  <span className="text-slate-700">Response format</span>
                   <select
-                    className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 px-3 py-1.5 text-xs text-white shadow"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
                     value={outputMode}
                     onChange={async (e) => {
                       const v = e.target.value as "text" | "voice";
@@ -737,27 +705,6 @@ export default function Home() {
                     <option value="text" className="text-gray-800">Text</option>
                     <option value="voice" className="text-gray-800">Voice</option>
                   </select>
-                </label>
-
-                <label className="flex items-center justify-between gap-3">
-                  <span className="text-slate-700">Conversational Voice</span>
-                  <input
-                    type="checkbox"
-                    checked={convMode}
-                    onChange={(e) => {
-                      const v = e.target.checked;
-                      setConvMode(v);
-                      if (v) {
-                        setUseStream(true);
-                        setOutputMode("voice");
-                      } else {
-                        setUseStream(false);
-                        setOutputMode("text");
-                      }
-                    }}
-                    disabled={privacyMode !== "cloud"}
-                    className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600"
-                  />
                 </label>
 
                 <label className="flex items-center justify-between gap-3">
@@ -780,14 +727,9 @@ export default function Home() {
                   />
                 </label>
 
-                <label className="flex items-center justify-between gap-3">
-                  <span className="text-slate-700">Stream Mode</span>
-                  <span className="text-xs text-slate-500">Always on</span>
-                </label>
-
                 <button
-                  className={`w-full rounded-md px-3 py-2 text-sm font-medium text-white ${
-                    glassesConnected ? "bg-emerald-600 hover:bg-emerald-500" : "bg-indigo-600 hover:bg-indigo-500"
+                  className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 ${
+                    glassesConnected ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-900"
                   }`}
                   onClick={() => {
                     if (glassesConnected) setGlassesConnected(false);
@@ -848,89 +790,14 @@ export default function Home() {
           <button className="mr-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm hover:bg-slate-50 md:hidden" onClick={() => setMobileSidebarOpen(true)}>
             ≡
           </button>
-          <div className={`h-3 w-3 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-zinc-400"}`} />
-          <span className="text-sm">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
-            <span className="font-medium">Output</span>
-            <select
-              className="bg-gradient-to-br from-blue-500 to-purple-600 text-white px-3 py-2 rounded-xl shadow-lg transition-all duration-300 hover:scale-105"
-              value={outputMode}
-              onChange={async (e) => {
-                const v = e.target.value as "text" | "voice";
-                setOutputMode(v);
-                try {
-                  await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) });
-                } catch {}
-              }}
-            >
-              <option value="text" className="text-gray-800">Text</option>
-              <option value="voice" className="text-gray-800">Voice</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
-            <span className="font-medium">Conversational Voice</span>
-            <input
-              type="checkbox"
-              checked={convMode}
-              onChange={(e) => {
-                const v = e.target.checked;
-                setConvMode(v);
-                if (v) {
-                  setUseStream(true);
-                  setOutputMode("voice");
-                } else {
-                  setUseStream(false);
-                  setOutputMode("text");
-                }
-              }}
-              disabled={privacyMode !== "cloud"}
-              className="w-4 h-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md border-2 border-purple-400 text-white transition-all duration-300 hover:scale-110"
-            />
-          </label>
-          <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
-            <span className="font-medium">Privacy</span>
-            <input
-              type="checkbox"
-              checked={privacyMode !== "off"}
-              onChange={async (e) => {
-                const v = e.target.checked ? "cloud" : "off";
-                setPrivacyMode(v as any);
-                try {
-                  await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) });
-                } catch {}
-              }}
-              className="w-4 h-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md border-2 border-purple-400 text-white transition-all duration-300 hover:scale-110"
-            />
-          </label>
-          {/* Stream Mode forced ON; toggle removed */}
-          <button
-            className={`relative px-4 py-2 text-sm font-medium text-white rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${
-              glassesConnected 
-                ? "bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-emerald-500/25" 
-                : "bg-gradient-to-r from-blue-500 to-purple-600 shadow-blue-500/25"
-            }`}
-            onClick={() => {
-              if (glassesConnected) {
-                setGlassesConnected(false);
-              } else {
-                setShowGlassesModal(true);
-              }
-            }}
-            title="Connect AI Glasses (simulated)"
-          >
-            <span className="flex items-center gap-2">
-              {glassesConnected ? "🥽" : "👓"}
-              {glassesConnected ? "Glasses Connected" : "Connect Glasses"}
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </span>
-          </button>
-          </div>
       </header>
+
+      {showMonitorToast && (
+        <div className="fixed bottom-5 right-5 z-50 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow">
+          Text suggestions active
+        </div>
+      )}
 
       <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-12">
         {/* User Journey Status */}
@@ -939,7 +806,6 @@ export default function Home() {
             consented={consented}
             paused={paused}
             outputMode={outputMode}
-            convMode={convMode}
             privacyMode={privacyMode}
             speakingSeconds={speakingSeconds}
             intensityPct={intensityPct}
@@ -1004,15 +870,7 @@ export default function Home() {
           <div className="whitespace-pre-line rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-800">
             {suggestion}
           </div>
-          <div className="mt-2 text-xs text-slate-500">Updated continuously in the background.</div>
           <video ref={videoRef} className="hidden h-[1px] w-[1px]" muted playsInline />
-        </section>
-
-        {/* Compact feedback row */}
-        <section className="md:col-span-9 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-sm">
-          <button className="rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-50" onClick={async()=>{ try { await fetch('/api/agent/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({improved:true})}); } catch {} }}>Helpful</button>
-          <button className="rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-50" onClick={async()=>{ try { await fetch('/api/agent/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({falsePositive:true})}); } catch {} }}>Not relevant</button>
-          <span className="text-slate-500">Suggestions update continuously in the background.</span>
         </section>
 
         

@@ -4,7 +4,6 @@ interface UserJourneyStatusProps {
   consented: boolean;
   paused: boolean;
   outputMode: "text" | "voice";
-  convMode: boolean;
   privacyMode: "off" | "local" | "cloud";
   speakingSeconds: number;
   intensityPct: number;
@@ -14,7 +13,6 @@ export default function UserJourneyStatus({
   consented,
   paused,
   outputMode,
-  convMode,
   privacyMode,
   speakingSeconds,
   intensityPct
@@ -25,8 +23,7 @@ export default function UserJourneyStatus({
     if (privacyMode === "off") return { stage: "Setup", status: "pending", message: "Enable Cloud mode for AI features" };
     if (privacyMode === "local") return { stage: "Monitoring", status: "active", message: "Local monitoring active" };
     if (outputMode === "text") return { stage: "Monitoring", status: "active", message: "Text suggestions active" };
-    if (outputMode === "voice" && !convMode) return { stage: "Coaching", status: "active", message: "Voice output ready" };
-    if (outputMode === "voice" && convMode) return { stage: "Coaching", status: "active", message: "Live voice coaching active" };
+    if (outputMode === "voice") return { stage: "Coaching", status: "active", message: "Voice responses active" };
     return { stage: "Results", status: "active", message: "Full AI coaching enabled" };
   };
 
