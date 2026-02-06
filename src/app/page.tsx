@@ -80,6 +80,12 @@ export default function Home() {
   const speakingThreshold = 0.06; // heuristic
   const spikeFactor = 2.2; // interruption heuristic
 
+  const cardBase = "rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur";
+  const cardTitleRow = "mb-4 flex items-start justify-between gap-3";
+  const pillBase = "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium";
+  const primaryBtn = "rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900";
+  const secondaryBtn = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50";
+
   const stopAudio = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
@@ -657,22 +663,23 @@ export default function Home() {
             {sidebarOpen && (
               <>
 
-              <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
-                <div className="mb-3 text-base font-semibold text-slate-900">Settings</div>
+              <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+                <div className="mb-1 text-lg font-semibold tracking-tight text-slate-900">Settings</div>
+                <div className="mb-4 text-xs text-slate-500">Control privacy, output, and device inputs.</div>
                 <div className="space-y-4 text-sm">
                   <label className="flex items-center justify-between gap-3">
                     <span className="text-slate-700">Response format</span>
-                    <select className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs" value={outputMode} onChange={async (e)=>{ const v = e.target.value as "text"|"voice"; setOutputMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) }); } catch {} }}>
+                    <select className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm" value={outputMode} onChange={async (e)=>{ const v = e.target.value as "text"|"voice"; setOutputMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) }); } catch {} }}>
                       <option value="text" className="text-gray-800">Text</option>
                       <option value="voice" className="text-gray-800">Voice</option>
                     </select>
                   </label>
                   <label className="flex items-center justify-between gap-3">
                     <span className="text-slate-700">Privacy</span>
-                    <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
+                    <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-indigo-400 bg-gradient-to-br from-indigo-500 to-purple-600" />
                   </label>
-                  <button className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 ${glassesConnected ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-900"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
-                  <button className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={closeApp}>Close App</button>
+                  <button className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium shadow-sm hover:bg-slate-50 ${glassesConnected ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-900"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
+                  <button className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={closeApp}>Close App</button>
                 </div>
               </div>
 
@@ -833,14 +840,18 @@ export default function Home() {
 
       {/* Hero banner */}
       <div className="mx-auto w-full max-w-6xl px-6 pt-6">
-        <div className="rounded-2xl bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 p-6 shadow-2xl">
+        <div className="rounded-3xl border border-white/20 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 p-6 shadow-2xl">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold drop-shadow-sm">OmniSense</h1>
-              <p className="mt-1 text-sm text-fuchsia-50/90">AI-Powered Social Insight Analysis</p>
+              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">OmniSense</h1>
+              <p className="mt-1 text-sm text-fuchsia-50/90">Real-time social insight, coaching, and follow-ups.</p>
             </div>
             <div className="flex items-center gap-3">
-              <button className={`rounded-md px-3 py-2 text-sm font-medium text-white ${demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/20 hover:bg-white/30"}`} onClick={()=>{ setAppClosed(false); setDemoMode(v=>!v); }}>
+              <div className={`${pillBase} border-white/30 bg-white/15 text-white`}> 
+                <span className={`h-2 w-2 rounded-full ${consented && !paused ? "bg-emerald-300" : "bg-white/60"}`} />
+                <span>{consented && !paused ? "AI Assist ON" : "AI Assist OFF"}</span>
+              </div>
+              <button className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/15 hover:bg-white/25"}`} onClick={()=>{ setAppClosed(false); setDemoMode(v=>!v); }}>
                 {demoMode ? "Demo: ON" : "Demo"}
               </button>
             </div>
@@ -849,11 +860,26 @@ export default function Home() {
       </div>
 
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2">
-          <button className="mr-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm hover:bg-slate-50 md:hidden" onClick={() => setMobileSidebarOpen(true)}>
+        <div className="flex items-center gap-3">
+          <button className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm shadow-sm hover:bg-slate-50 md:hidden" onClick={() => setMobileSidebarOpen(true)}>
             ≡
           </button>
+          <div className={`${pillBase} ${privacyMode === "off" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-700"}`}>
+            <span className={`h-2 w-2 rounded-full ${privacyMode === "off" ? "bg-amber-500" : "bg-emerald-500"}`} />
+            <span>{privacyMode === "off" ? "Privacy off" : "Cloud enabled"}</span>
+          </div>
+          <div className={`${pillBase} border-slate-200 bg-white text-slate-700`}>
+            <span className="text-slate-500">Format</span>
+            <span className="font-semibold text-slate-900">{outputMode === "voice" ? "Voice" : "Text"}</span>
+          </div>
         </div>
+        {!sidebarOpen && (
+          <div className="hidden items-center gap-2 md:flex">
+            <button className={secondaryBtn} onClick={() => setSidebarOpen(true)}>
+              Settings
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-12">
@@ -905,9 +931,68 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        <section className={`md:col-span-3 ${cardBase}`}>
+          <div className={cardTitleRow}>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Session</h3>
+              <div className="mt-1 text-xs text-slate-500">Live signals and device status.</div>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-600">Speaking</span>
+              <span className="font-semibold text-slate-900">{speakingSeconds}s</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-600">Intensity</span>
+              <span className="font-semibold text-slate-900">{intensityPct}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-600">Engagement</span>
+              <span className="font-semibold text-slate-900">{engagement}</span>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="mb-2 text-xs font-semibold text-slate-700">Sensors</div>
+              <div className="space-y-1 text-xs text-slate-600">
+                <div className="flex items-center justify-between">
+                  <span>Head motion</span>
+                  <span className="font-medium text-slate-900">{sensorSample?.headMotion || "-"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Brightness</span>
+                  <span className="font-medium text-slate-900">{typeof sensorSample?.brightness === "number" ? sensorSample.brightness : "-"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Temp</span>
+                  <span className="font-medium text-slate-900">{typeof sensorSample?.temp === "number" ? sensorSample.temp : "-"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs font-semibold text-slate-700">Glasses</div>
+              <div className={`text-xs font-semibold ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                {reconnecting ? "Reconnecting…" : glassesConnected ? "Connected" : "Not connected"}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Live Suggestions only; camera runs in background */}
-        <section className="md:col-span-9 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-2 text-lg font-semibold">Live Suggestions</h3>
+        <section className={`md:col-span-9 ${cardBase}`}>
+          <div className={cardTitleRow}>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Live Suggestions</h3>
+              <div className="mt-1 text-xs text-slate-500">Short, actionable coaching as context updates.</div>
+            </div>
+            <div className="flex items-center gap-2">
+              {demoMode && <div className={`${pillBase} border-slate-200 bg-slate-50 text-slate-700`}>Demo</div>}
+              {interruption && <div className={`${pillBase} border-amber-200 bg-amber-50 text-amber-800`}>Interruption</div>}
+            </div>
+          </div>
           {demoMode && (
             <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
               <div className="mb-2 text-xs font-medium text-slate-600">Demo video</div>
@@ -919,12 +1004,7 @@ export default function Home() {
               />
             </div>
           )}
-          {interruption && (
-            <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
-              {interruption}
-            </div>
-          )}
-          <div className="whitespace-pre-line rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-800">
+          <div className="whitespace-pre-line rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-relaxed text-slate-800">
             {suggestion}
           </div>
           <video ref={videoRef} className="hidden h-[1px] w-[1px]" muted playsInline />
@@ -932,11 +1012,19 @@ export default function Home() {
 
         
 
-        <section className="md:col-span-12 flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="text-lg font-semibold">Planner</h3>
-          <div className="flex items-center gap-2">
+        <section className={`md:col-span-12 ${cardBase}`}>
+          <div className={cardTitleRow}>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Planner</h3>
+              <div className="mt-1 text-xs text-slate-500">Draft a goal and execute when you’re ready.</div>
+            </div>
+            <div className={`${pillBase} ${autoRunGoal ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>
+              <span>{autoRunGoal ? "Auto" : "Manual"}</span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
-              className="flex-1 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
               placeholder="Goal (e.g., Prepare follow-up plan for the meeting)"
               value={runGoal}
               onChange={(e) => {
@@ -946,12 +1034,12 @@ export default function Home() {
               }}
             />
             {!autoRunGoal && (
-              <button className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700" onClick={() => setAutoRunGoal(true)}>
+              <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoRunGoal(true)}>
                 Resume auto
               </button>
             )}
             <button
-              className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+              className={primaryBtn}
               disabled={!runGoal.trim()}
               onClick={async () => {
                 setRunResult("Running...");
@@ -972,15 +1060,23 @@ export default function Home() {
               Run
             </button>
           </div>
-          {runResult && <div className="text-xs text-zinc-600 dark:text-zinc-400">{runResult}</div>}
+          {runResult && <div className="text-xs text-slate-500">{runResult}</div>}
         </section>
 
         {/* Verification/Audit removed from Home (kept for Demo Mode link elsewhere) */}
 
-        <section className="md:col-span-12 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="mb-2 text-lg font-semibold">Follow‑ups</h3>
+        <section className={`md:col-span-12 ${cardBase}`}>
+          <div className={cardTitleRow}>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Follow‑ups</h3>
+              <div className="mt-1 text-xs text-slate-500">Auto-drafted notes you can edit and execute.</div>
+            </div>
+            <div className={`${pillBase} ${autoNotes ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>
+              <span>{autoNotes ? "Auto" : "Manual"}</span>
+            </div>
+          </div>
           <textarea
-            className="w-full min-h-28 rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
+            className="w-full min-h-32 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
             placeholder="Paste brief meeting notes (or type key commitments)..."
             value={notes}
             onChange={(e) => {
@@ -991,24 +1087,24 @@ export default function Home() {
           />
           <div className="mt-3 flex items-center gap-3">
             {!autoNotes && (
-              <button className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700" onClick={() => setAutoNotes(true)}>
+              <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoNotes(true)}>
                 Resume auto
               </button>
             )}
             <button
-              className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-white dark:text-black"
+              className={primaryBtn}
               onClick={extractActions}
               disabled={!notes.trim() || extracting}
             >
               {extracting ? "Extracting..." : "Extract Actions"}
             </button>
-            {summary && <span className="text-xs text-zinc-500">Summary ready</span>}
+            {summary && <span className="text-xs text-slate-500">Summary ready</span>}
           </div>
 
           {summary && (
-            <div className="mt-4 rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm">
               <div className="mb-1 font-medium">Summary</div>
-              <div className="text-zinc-700 dark:text-zinc-300">{summary}</div>
+              <div className="text-slate-700">{summary}</div>
             </div>
           )}
 
@@ -1016,10 +1112,10 @@ export default function Home() {
             <div className="mt-4 space-y-2">
               <div className="font-medium">Actions</div>
               {actions.map((a, i) => (
-                <div key={i} className="flex items-center justify-between rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+                <div key={i} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
                   <div>
                     <div className="font-medium">{a.title}</div>
-                    <div className="text-xs text-zinc-500">
+                    <div className="text-xs text-slate-500">
                       {a.type}
                       {a.owner ? ` • ${a.owner}` : ""}
                       {a.due ? ` • due ${a.due}` : ""}
@@ -1028,7 +1124,7 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     {a.type === "calendar" && (
                       <a
-                        className="rounded-md border px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 hover:bg-slate-50"
                         href={calendarDraftUrl(a.title, a.date, a.time)}
                         target="_blank"
                         rel="noreferrer"
@@ -1038,7 +1134,7 @@ export default function Home() {
                     )}
                     {a.type === "task" && (
                       <button
-                        className="rounded-md border px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 hover:bg-slate-50"
                         onClick={() => alert("Task added locally for demo")}
                       >
                         Add Task
