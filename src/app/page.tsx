@@ -350,7 +350,7 @@ export default function Home() {
                   try {
                     const obj = JSON.parse(json);
                     const tip = obj?.action_recommendation || obj?.analysis || obj?.observation;
-                    if (!cancelled && tip) setSuggestion(String(tip).slice(0, 180));
+                    if (!cancelled && tip) setSuggestion(String(tip).slice(0, 700));
                     await reader.cancel();
                     return;
                   } catch {}
@@ -796,12 +796,23 @@ export default function Home() {
         {/* Live Suggestions only; camera runs in background */}
         <section className="md:col-span-9 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-lg font-semibold">Live Suggestions</h3>
+          {demoMode && (
+            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <div className="mb-2 text-xs font-medium text-slate-600">Demo video</div>
+              <video
+                className="h-44 w-full rounded bg-black object-cover"
+                controls
+                playsInline
+                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              />
+            </div>
+          )}
           {interruption && (
             <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
               {interruption}
             </div>
           )}
-          <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-800">
+          <div className="whitespace-pre-line rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-800">
             {suggestion}
           </div>
           <div className="mt-2 text-xs text-slate-500">Updated continuously in the background.</div>

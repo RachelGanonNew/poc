@@ -15,7 +15,11 @@ export async function POST(req: NextRequest) {
         insight_type: "Social",
         observation: "Balanced turn-taking could be improved",
         analysis: "One voice dominates; others paused. Consider inviting input and clarifying next steps.",
-        action_recommendation: "Invite 1-2 quieter members to weigh in and assign owners + dates for top items.",
+        action_recommendation:
+          "The Vibe: Slightly tense; one person dominates.\n" +
+          "The Hidden Meaning: Others may be holding back.\n" +
+          "Social Red Flags: Little turn-taking; long monologue.\n" +
+          "The Social Script: What to say: ‘Quick check—anyone else want to weigh in?’",
       });
       sample.confidence = 0.5;
       agentAddEvent("insight", sample);
@@ -68,8 +72,14 @@ Live Observations:
 
 Instructions:
 - Return ONLY a JSON object with keys: insight_type, observation, analysis, action_recommendation.
+- Set insight_type to "Social".
 - Keep it concise and actionable.
 - Avoid sensitive attribute inferences; do not mention biometrics or identity.
+- action_recommendation MUST be 4 short lines, exactly:
+  The Vibe: ...
+  The Hidden Meaning: ...
+  Social Red Flags: ...
+  The Social Script: What to understand: ... What to say: ... What to do: ...
 ${tuning ? `\nTuning: ${tuning}` : ""}
 `;
 
@@ -79,7 +89,11 @@ ${tuning ? `\nTuning: ${tuning}` : ""}
         insight_type: "Strategic",
         observation: "Local mode enabled — providing generic advice",
         analysis: "Based on audio dynamics and transcript snippet only.",
-        action_recommendation: "Invite others, clarify owners/dates, and timebox decisions.",
+        action_recommendation:
+          "The Vibe: Neutral (local privacy mode).\n" +
+          "The Hidden Meaning: Limited context; using safe defaults.\n" +
+          "Social Red Flags: None detected with high confidence.\n" +
+          "The Social Script: What to say: ‘Let’s pause—what’s the main point?’",
       });
       local.confidence = 0.45;
       agentAddEvent("insight", local);

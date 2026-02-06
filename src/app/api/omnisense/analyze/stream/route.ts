@@ -29,8 +29,14 @@ Live Observations:
 
 Instructions:
 - Return ONLY a JSON object with keys: insight_type, observation, analysis, action_recommendation.
+- Set insight_type to "Social".
 - Keep it concise and actionable.
 - Avoid sensitive attribute inferences; do not mention biometrics or identity.
+- action_recommendation MUST be 4 short lines, exactly:
+  The Vibe: ...
+  The Hidden Meaning: ...
+  Social Red Flags: ...
+  The Social Script: What to understand: ... What to say: ... What to do: ...
 `;
 
   const stream = new ReadableStream({
