@@ -60,7 +60,6 @@ export default function Home() {
   const [demoMode, setDemoMode] = useState<boolean>(false);
   const [appClosed, setAppClosed] = useState<boolean>(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
-  const [showMonitorToast, setShowMonitorToast] = useState<boolean>(false);
   const suggestionBeforeDemoRef = useRef<string>("");
   const demoIntervalRef = useRef<number | null>(null);
   const [showDemo, setShowDemo] = useState<boolean>(false);
@@ -563,22 +562,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!consented || paused || privacyMode === "off" || outputMode !== "text") return;
-    let cancelled = false;
-    const iv = window.setInterval(() => {
-      if (cancelled) return;
-      setShowMonitorToast(true);
-      window.setTimeout(() => {
-        if (!cancelled) setShowMonitorToast(false);
-      }, 2200);
-    }, 9000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(iv);
-    };
-  }, [consented, paused, privacyMode, outputMode]);
-
-  useEffect(() => {
     return () => {
       teardown();
     };
@@ -667,15 +650,15 @@ export default function Home() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-40 hidden h-screen border-r border-slate-200 bg-white/90 backdrop-blur md:block ${sidebarOpen ? "w-72" : "w-14"}`}
+        className={`fixed left-0 top-0 z-40 hidden h-screen border-r border-slate-200 bg-gradient-to-b from-white via-slate-50 to-slate-100 md:block ${sidebarOpen ? "w-72" : "w-14"}`}
       >
-        <div className="flex h-full flex-col p-2">
+        <div className="flex h-full flex-col p-3">
           <div className="flex-1">
             {sidebarOpen && (
               <>
 
-              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                <h3 className="mb-3 text-sm font-semibold text-slate-900">Settings</h3>
+              <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+                <div className="mb-3 text-base font-semibold text-slate-900">Settings</div>
                 <div className="space-y-4 text-sm">
                   <label className="flex items-center justify-between gap-3">
                     <span className="text-slate-700">Response format</span>
@@ -693,24 +676,26 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                <button className="w-full text-left text-sm font-semibold" onClick={()=>setShowDemo(v=>!v)}>
-                  {showDemo ? "▼" : "►"} Demo Mode
-                </button>
-                {showDemo && (
-                  <div className="mt-3 space-y-3 text-sm">
-                    <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
-                    <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
-                    <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
-                      Check API Health
-                    </button>
-                    {showAuditLink && (
-                      <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
-                    )}
-                    {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
-                  </div>
-                )}
-              </div>
+              {demoMode && (
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+                  <button className="w-full text-left text-sm font-semibold" onClick={()=>setShowDemo(v=>!v)}>
+                    {showDemo ? "▼" : "►"} Demo settings
+                  </button>
+                  {showDemo && (
+                    <div className="mt-3 space-y-3 text-sm">
+                      <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
+                      <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
+                      <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
+                        Check API Health
+                      </button>
+                      {showAuditLink && (
+                        <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
+                      )}
+                      {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {showDetectionsSidebar && detections.length>0 && (
                 <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -743,7 +728,7 @@ export default function Home() {
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileSidebarOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-72 overflow-auto bg-white p-3 shadow-xl">
+          <div className="absolute left-0 top-0 h-full w-72 overflow-auto bg-gradient-to-b from-white via-slate-50 to-slate-100 p-3 shadow-xl">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-sm font-semibold">OmniSense</div>
               <button className="rounded-md border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50" onClick={() => setMobileSidebarOpen(false)}>
@@ -758,8 +743,8 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <h3 className="mb-3 text-sm font-semibold text-slate-900">Settings</h3>
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+              <div className="mb-3 text-base font-semibold text-slate-900">Settings</div>
               <div className="space-y-4 text-sm">
                 <label className="flex items-center justify-between gap-3">
                   <span className="text-slate-700">Response format</span>
@@ -820,24 +805,26 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <button className="w-full text-left text-sm font-semibold" onClick={() => setShowDemo((v) => !v)}>
-                {showDemo ? "▼" : "►"} Demo Mode
-              </button>
-              {showDemo && (
-                <div className="mt-3 space-y-3 text-sm">
-                  <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
-                  <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
-                  <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
-                    Check API Health
-                  </button>
-                  {showAuditLink && (
-                    <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
-                  )}
-                  {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
-                </div>
-              )}
-            </div>
+            {demoMode && (
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+                <button className="w-full text-left text-sm font-semibold" onClick={() => setShowDemo((v) => !v)}>
+                  {showDemo ? "▼" : "►"} Demo settings
+                </button>
+                {showDemo && (
+                  <div className="mt-3 space-y-3 text-sm">
+                    <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
+                    <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
+                    <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
+                      Check API Health
+                    </button>
+                    {showAuditLink && (
+                      <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
+                    )}
+                    {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -868,12 +855,6 @@ export default function Home() {
           </button>
         </div>
       </header>
-
-      {showMonitorToast && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow">
-          Text suggestions active
-        </div>
-      )}
 
       <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-12">
         {/* User Journey Status */}
