@@ -90,8 +90,17 @@ INPUTS:
     // Log failure and emit verification FAIL
     agentAddEvent("system", { kind: "agent.error", details: { where: "runAgentStep.generateContent", error: String(lastErr?.message || lastErr) } });
     try { await executeTool({ name: "agent.verify_step", args: { claim: "Model call failed after retries", evidence: "generateContent", pass: false } }); } catch {}
-    // Return graceful degraded output to keep run consistent
-    return JSON.stringify({ thoughts: "Model unreachable, deferring actions.", tool_calls: [], final: "degraded" });
+    // Return a user-facing explanation while keeping the run consistent.
+    // Keep the 4-line contract so downstream UI stays stable.
+    return JSON.stringify({
+      thoughts: "Gemini API unreachable; returning fallback response.",
+      tool_calls: [],
+      final:
+        "The Vibe: AI temporarily offline.\n" +
+        "The Hidden Meaning: Gemini API call failed.\n" +
+        "Social Red Flags: Check key/quota/network.\n" +
+        "The Social Script: Retry; verify GEMINI_API_KEY.",
+    });
   }
 
   let text = await callWithRetry(3);

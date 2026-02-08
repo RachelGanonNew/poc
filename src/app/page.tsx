@@ -47,6 +47,9 @@ export default function Home() {
   const [detections, setDetections] = useState<{ t: number; kind: string; info?: string }[]>([]);
   const [runGoal, setRunGoal] = useState("");
   const [runResult, setRunResult] = useState<string>("");
+  const [runStatus, setRunStatus] = useState<string>("");
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  const [runElapsedSec, setRunElapsedSec] = useState<number>(0);
   const [autoRunGoal, setAutoRunGoal] = useState<boolean>(true);
   const [autoNotes, setAutoNotes] = useState<boolean>(true);
   const lastRunGoalEditRef = useRef<number>(0);
@@ -259,6 +262,15 @@ export default function Home() {
       window.clearInterval(iv);
     };
   }, [consented, paused, demoMode, privacyMode, autoRunGoal, autoNotes]);
+
+  useEffect(() => {
+    if (!runStartedAt) return;
+    setRunElapsedSec(0);
+    const iv = window.setInterval(() => {
+      setRunElapsedSec(Math.max(0, Math.floor((Date.now() - runStartedAt) / 1000)));
+    }, 500);
+    return () => window.clearInterval(iv);
+  }, [runStartedAt]);
 
   // Demo Mode: scripted showcase without requiring camera/mic
   useEffect(() => {
@@ -1032,21 +1044,13 @@ export default function Home() {
                 setAutoRunGoal(false);
                 const next = e.target.value;
                 setRunGoal(next);
-                if (!next.trim()) setRunResult("");
+                if (!next.trim()) {
+                  setRunResult("");
+                  setRunStatus("");
+                  setRunStartedAt(null);
+                }
               }}
             />
-            {!!runGoal.trim() && (
-              <button
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
-                onClick={() => {
-                  setRunGoal("");
-                  setRunResult("");
-                  setAutoRunGoal(false);
-                }}
-              >
-                Clear
-              </button>
-            )}
             {!autoRunGoal && (
               <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoRunGoal(true)}>
                 Resume auto
@@ -1056,12 +1060,18 @@ export default function Home() {
               className={primaryBtn}
               disabled={!runGoal.trim()}
               onClick={async () => {
-                setRunResult("Running...");
+                const goal = runGoal.trim();
+                if (!goal) return;
+                setRunGoal("");
+                setAutoRunGoal(false);
+                setRunResult("");
+                setRunStatus("Running...");
+                setRunStartedAt(Date.now());
                 try {
                   const res = await fetch("/api/agent/run", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ goal: runGoal.trim(), steps: 3, maxToolsPerStep: 2 }),
+                    body: JSON.stringify({ goal, steps: 3, maxToolsPerStep: 2 }),
                   });
                   let json: any = null;
                   try {
@@ -1075,7 +1085,11 @@ export default function Home() {
                   }
                   const final = json?.final ? String(json.final) : "";
                   setRunResult(final || `ok: steps=${json.steps}`);
+                  setRunStatus("");
+                  setRunStartedAt(null);
                 } catch (e: any) {
+                  setRunStatus("");
+                  setRunStartedAt(null);
                   setRunResult(`error: ${e?.message || String(e)}`);
                 }
               }}
@@ -1083,6 +1097,7 @@ export default function Home() {
               Run
             </button>
           </div>
+          {runStatus && <div className="text-xs text-slate-500">{runStatus} (elapsed {runElapsedSec}s, ETA ~10–30s)</div>}
           {runResult && <div className="whitespace-pre-line text-xs text-slate-500">{runResult}</div>}
         </section>
 
