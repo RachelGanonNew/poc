@@ -4,6 +4,7 @@ import { getOmniContext } from "@/lib/omnisenseStore";
 import { allowRequest, coerceInsight, scoreConfidence } from "@/lib/validate";
 import { agentAddEvent } from "@/lib/agentStore";
 import { addPersonSeen } from "@/lib/memoryStore";
+import { appendInteraction, buildLongMemorySnippet } from "@/lib/longMemory";
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest) {
 
     const { systemInstruction, preferences, historySnippet } = getOmniContext();
     const system = overrideSystemInstruction || systemInstruction;
+    const longMemory = await buildLongMemorySnippet({ preferences: preferences || {}, limit: 18, maxChars: 1600 });
 
     // Privacy enforcement
     const privacy = preferences?.privacyMode || "cloud";
@@ -40,6 +42,18 @@ export async function POST(req: NextRequest) {
       });
       sample.confidence = 0.5;
       agentAddEvent("insight", { source: "frames-demo", transcript: transcript.slice(0, 200), ...sample });
+      try {
+        await appendInteraction(
+          "omni.analyze_frames.local",
+          {
+            input: { frames: frames.length, transcript: transcript.slice(0, 1000) },
+            output: sample,
+            meta: { privacy, ip },
+            preferences: preferences || {},
+          },
+          { maxItems: 800 }
+        );
+      } catch {}
       if (transcript) {
         const m = transcript.match(/[A-Z][a-z]+\s+[A-Z][a-z]+/g);
         if (m) m.slice(0, 3).forEach((n: string) => addPersonSeen(n));
@@ -69,6 +83,9 @@ export async function POST(req: NextRequest) {
 
 User Context (short): ${JSON.stringify(preferences || {})}
 History Snippet: ${historySnippet || ""}
+
+LongTermMemory (recent interactions; may be empty):
+${longMemory || ""}
 
 Instructions:
 - Analyze the set of frames together with transcript (if any).
@@ -106,6 +123,18 @@ Instructions:
     const conf = await scoreConfidence(genAI, coerced);
     coerced.confidence = conf;
     agentAddEvent("insight", { source: "frames", transcript: transcript.slice(0, 200), ...coerced });
+    try {
+      await appendInteraction(
+        "omni.analyze_frames",
+        {
+          input: { frames: frames.length, transcript: transcript.slice(0, 1000) },
+          output: coerced,
+          meta: { ip },
+          preferences: preferences || {},
+        },
+        { maxItems: 800 }
+      );
+    } catch {}
     return NextResponse.json(coerced);
   } catch (e) {
     return NextResponse.json({ error: "failed" }, { status: 500 });

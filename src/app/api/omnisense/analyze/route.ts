@@ -4,6 +4,7 @@ import { getOmniContext } from "@/lib/omnisenseStore";
 import { allowRequest, coerceInsight, scoreConfidence } from "@/lib/validate";
 import { agentAddEvent, agentGet } from "@/lib/agentStore";
 import { addPersonSeen } from "@/lib/memoryStore";
+import { appendInteraction, buildLongMemorySnippet } from "@/lib/longMemory";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +24,14 @@ export async function POST(req: NextRequest) {
       });
       sample.confidence = 0.5;
       agentAddEvent("insight", sample);
+      try {
+        const { preferences } = getOmniContext();
+        await appendInteraction(
+          "omni.analyze.demo",
+          { input: body, output: sample, meta: { mode: "no_api_key" }, preferences: preferences || {} },
+          { maxItems: 800 }
+        );
+      } catch {}
       return NextResponse.json(sample);
     }
     // Simple rate limit per IP
@@ -50,6 +59,7 @@ export async function POST(req: NextRequest) {
       tuning = "Be more proactive; suggest specific next actions where appropriate.";
     }
     const system = overrideSystemInstruction || systemInstruction;
+    const longMemory = await buildLongMemorySnippet({ preferences: preferences || {}, limit: 24, maxChars: 2200 });
 
     // Privacy enforcement
     const privacy = preferences?.privacyMode || "cloud";
@@ -69,6 +79,9 @@ Live Observations:
 - Audio: ${JSON.stringify(audioDynamics || {})}
 - Vision: ${JSON.stringify(visionHints || {})}
 - Transcript: ${transcript || ""}
+
+LongTermMemory (recent interactions; may be empty):
+${longMemory || ""}
 
 Instructions:
 - Return ONLY a JSON object with keys: insight_type, observation, analysis, action_recommendation.
@@ -97,6 +110,13 @@ ${tuning ? `\nTuning: ${tuning}` : ""}
       });
       local.confidence = 0.45;
       agentAddEvent("insight", local);
+      try {
+        await appendInteraction(
+          "omni.analyze.local",
+          { input: { audioDynamics, visionHints, transcript }, output: local, meta: { privacy }, preferences: preferences || {} },
+          { maxItems: 800 }
+        );
+      } catch {}
       // Memory: naive person extraction from transcript
       if (transcript) {
         const m = transcript.match(/[A-Z][a-z]+\s+[A-Z][a-z]+/g);
@@ -128,6 +148,18 @@ ${tuning ? `\nTuning: ${tuning}` : ""}
     const conf = await scoreConfidence(genAI, coerced);
     coerced.confidence = conf;
     agentAddEvent("insight", coerced);
+    try {
+      await appendInteraction(
+        "omni.analyze",
+        {
+          input: { audioDynamics, visionHints, transcript },
+          output: coerced,
+          meta: { privacy, ip },
+          preferences: preferences || {},
+        },
+        { maxItems: 800 }
+      );
+    } catch {}
     if (transcript) {
       const m = transcript.match(/[A-Z][a-z]+\s+[A-Z][a-z]+/g);
       if (m) m.slice(0, 3).forEach((n: string) => addPersonSeen(n));

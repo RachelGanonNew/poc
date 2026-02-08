@@ -5,6 +5,7 @@ import { toolsSchemaSummary, executeTool, ToolCall } from "./tools";
 import { evaluatePolicies } from "./brain";
 import { logJsonl } from "./log";
 import { assembleLongContext } from "./context";
+import { appendInteraction, buildLongMemorySnippet } from "./longMemory";
 
 export type AgentStepInput = {
   observation: Record<string, any>;
@@ -39,12 +40,18 @@ export async function runAgentStep(input: AgentStepInput): Promise<AgentStepOutp
   const model = genAI.getGenerativeModel({ model: modelName });
 
   const longCtx = assembleLongContext();
+  const longMemory = await buildLongMemorySnippet({ preferences: prefs, limit: 24, maxChars: 2200 });
   const prompt = `${systemInstruction}
 
 IMPORTANT: Ignore any output-format requirements above. Follow the OUTPUT CONTRACT below exactly.
 
 ROLE: You are the Social Intelligence Interpreter.
 Your purpose is to act as a real-time "Social Translator" for the user. You process multimodal context (audio/video cues + environment + history) to reveal what is actually being felt or intended.
+
+ADAPTATION & MEMORY:
+- Use LONG-TERM MEMORY to detect patterns over time (relationship dynamics, recurring triggers, preferred communication style).
+- Incorporate cultural/communication-norm nuance only when evidence supports it; do not stereotype.
+- Prefer emotionally intelligent phrasing (name feelings, validate, de-escalate) while staying direct.
 
 PRINCIPLES:
 - Subtext-first: contrast literal words vs likely intent.
@@ -70,6 +77,7 @@ INPUTS:
 - Preferences: ${JSON.stringify(prefs)}
 - Stats: ${JSON.stringify(stats)}
 - LongContext: ${longCtx}
+- LongTermMemory (recent interactions; may be empty):\n${longMemory || ""}
 `;
 
   const started = Date.now();
@@ -162,5 +170,17 @@ INPUTS:
 
   agentAddEvent("system", { kind: "agent.step", ms: Date.now() - started, output: out });
   logJsonl({ type: "agent_step", ms: Date.now() - started, tools: executed.length });
+  try {
+    await appendInteraction(
+      "agent.step",
+      {
+        input: { observation: input.observation, preferences: prefs },
+        output: { thoughts: out.thoughts, final: out.final, level: out.level, signature: out.signature },
+        meta: { tools: executed.map((t) => ({ name: t.name, ok: t.ok })) },
+        preferences: prefs,
+      },
+      { maxItems: 800 }
+    );
+  } catch {}
   return out;
 }

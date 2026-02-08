@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOmniContext } from "@/lib/omnisenseStore";
+import { appendInteraction, buildLongMemorySnippet } from "@/lib/longMemory";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
   const { audioDynamics, visionHints, transcript, overrideSystemInstruction } = await req.json();
   const { systemInstruction, preferences, historySnippet } = getOmniContext();
   const system = overrideSystemInstruction || systemInstruction;
+  const longMemory = await buildLongMemorySnippet({ preferences: preferences || {}, limit: 18, maxChars: 1600 });
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
@@ -26,6 +28,9 @@ Live Observations:
 - Audio: ${JSON.stringify(audioDynamics || {})}
 - Vision: ${JSON.stringify(visionHints || {})}
 - Transcript: ${transcript || ""}
+
+LongTermMemory (recent interactions; may be empty):
+${longMemory || ""}
 
 Instructions:
 - Return ONLY a JSON object with keys: insight_type, observation, analysis, action_recommendation.
@@ -50,6 +55,18 @@ Instructions:
         // SSE format: data: <json>\n\n
         controller.enqueue(new TextEncoder().encode(`event: insight\n`));
         controller.enqueue(new TextEncoder().encode(`data: ${text}\n\n`));
+        try {
+          await appendInteraction(
+            "omni.analyze.stream",
+            {
+              input: { audioDynamics, visionHints, transcript },
+              output: { insight: text },
+              meta: { privacy: preferences?.privacyMode || "cloud" },
+              preferences: preferences || {},
+            },
+            { maxItems: 800 }
+          );
+        } catch {}
         controller.enqueue(new TextEncoder().encode(`event: done\n`));
         controller.enqueue(new TextEncoder().encode(`data: end\n\n`));
         controller.close();

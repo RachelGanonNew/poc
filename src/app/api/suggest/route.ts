@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getOmniContext } from "@/lib/omnisenseStore";
+import { appendInteraction, buildLongMemorySnippet } from "@/lib/longMemory";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,6 +11,8 @@ export async function POST(req: NextRequest) {
     }
     const body = await req.json();
     const { intensityPct, speaking, interruption } = body ?? {};
+    const { preferences } = getOmniContext();
+    const longMemory = await buildLongMemorySnippet({ preferences: preferences || {}, limit: 18, maxChars: 1600 });
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
 
@@ -21,6 +25,10 @@ Rules:
 - Do not infer protected traits or identity.
 - Keep it short and speakable.
 
+Personalization:
+- Use LONG-TERM MEMORY (if provided) to adapt coaching to the user's typical patterns and relationship dynamics.
+- Include cultural/communication-style nuance only if supported by evidence; do not stereotype.
+
 Required structure (4 short lines):
 The Vibe: ...
 The Hidden Meaning: ...
@@ -31,6 +39,9 @@ The Social Script: What to say: ...`;
 - Speaking: ${!!speaking}
 - Interruption: ${interruption ? "yes" : "no"}
 
+LongTermMemory (recent interactions; may be empty):
+${longMemory || ""}
+
 Generate the 4-line structured output. If interruption=yes, prioritize de-escalation and inclusion.
 If speaking=true and intensity is high, encourage brevity and invite others.`;
 
@@ -39,6 +50,13 @@ If speaking=true and intensity is high, encourage brevity and invite others.`;
       { role: "user", parts: [{ text: user }] },
     ]});
     const text = res.response.text().trim();
+    try {
+      await appendInteraction(
+        "suggest",
+        { input: { intensityPct, speaking, interruption }, output: { suggestion: text.slice(0, 240) }, meta: {}, preferences: preferences || {} },
+        { maxItems: 800 }
+      );
+    } catch {}
     return NextResponse.json({ suggestion: text.slice(0, 180) });
   } catch (e) {
     return NextResponse.json({ error: "failed" }, { status: 500 });
